@@ -142,9 +142,11 @@ Codex 在跑的时候，执行 `/codex:status` 能看到本仓库正在跑和最
 
 使用支持实时控制的插件版本时，`/codex:message <job-id> <补充指令>` 会向当前轮追加消息，不必等整轮结束。加 `--interrupt` 会取消当前轮，再由原任务在同一线程执行新指令；已有改动不会自动回滚，也不会改变原任务的写权限。返回的 Git 状态包含原有改动，不能全部归因于 Codex。
 
-遇到结构化反问，主会话会收到监视器（见下文）的一条 `QUESTION` 事件，底层 Codex 仍在等待。主会话按问题 ID 写入回答 JSON，例如 `{"source":{"answers":["从方案中心读取最新方案"]}}`，再执行 `/codex:answer <job-id> --request-id <id> --answers-file <绝对路径>`。默认等待回答 10 分钟，超时会中断并报告。
+遇到结构化反问，主会话会收到监视器（见下文）的一条 `QUESTION` 事件，底层 Codex 仍在等待。主会话以 status 中的问题 ID 为键写入回答 JSON，例如 `{"<question-id>":{"answers":["..."]}}`，再执行 `/codex:answer <job-id> --request-id <id> --answers-file <绝对路径>`。默认等待回答 10 分钟，超时会中断并报告。
 
-**每个仓库一个事件监视器。** 主会话对每个仓库用 Claude Code 的 Monitor 工具常驻运行一次 `codex-worker.sh events --cwd <仓库>`，每个任务用一次 Bash 调用 `codex-worker.sh dispatch` 启动，启动完就返回。之后每个任务事件都以一行文字直接进入主会话：`DONE`、`FAILED`、`QUESTION`、`NOTIFIED`、`STALLED`。全程不需要子 agent，所有任务共用一条通道。事件流本身也会在连续一小时没有活跃任务后自行退出，最后打印一行 `IDLE_EXIT`，主会话忘了停的监视器不会再空转好几天。
+从 Bash 回答时，用 `codex-worker.sh answer <job-id> <request-id> <answers-file> --cwd <repo>`。脚本发送前核对待回答请求、准确的问题 ID 和非空回答，发送后再次检查状态；成功输出 `ANSWERED job=<id> request=<id>`，失败输出 `ANSWER_FAILED` 和原因并以退出码 1 结束。`--cwd` 可放在 `answer` 后任意位置，缺省为当前目录；回答文件的相对路径按该目录解析。
+
+**每个仓库一个事件监视器。** 主会话对每个仓库用 Claude Code 的 Monitor 工具常驻运行一次 `codex-worker.sh events --cwd <仓库>`，每个任务用一次 Bash 调用 `codex-worker.sh dispatch` 启动，检查启动状态后返回。之后每个任务事件都以一行文字直接进入主会话：`DONE`、`FAILED`、`QUESTION`、`QUESTION_PENDING`、`NOTIFIED`、`STALLED`。问题未回答时，插件每 2 分钟重复发送一次 `QUESTION_PENDING`。全程不需要子 agent，所有任务共用一条通道。事件流本身也会在连续一小时没有活跃任务后自行退出，最后打印一行 `IDLE_EXIT`，主会话忘了停的监视器不会再空转好几天。
 
 Codex 知道自己是被谁启动的。`investigate` 和 `implement` 两种模式下，worker 脚本会在任务书前面加一段固定说明：你是由调度代理启动的，不是人类；`request_user_input` 的提问由调度代理回答；同一工作区可能还有其他 Codex 任务在跑（名单来自主会话派单时的 `SIBLINGS:` 头），不要自行协调，有事告诉调度代理。插件支持 `notify_director` 工具时，Codex 还可以在不停下来的情况下给调度代理发一句话，以 `NOTIFIED` 事件送达，任务继续跑。Codex 任务之间不直接对话，全部由主会话中转。
 
@@ -160,7 +162,7 @@ Codex 知道自己是被谁启动的。`investigate` 和 `implement` 两种模�
 
 **并行改文件用 worktree。** 同一个 checkout 里同时只跑一路 `implement`。要让 Codex 用两种方案各写一版，给每一路建一个 `git worktree` 并写进 `CWD:`，各改各的，Claude 最后挑。
 
-**后台启动、用事件代替等待。** task 类任务使用插件原生后台任务，`dispatch` 拿到任务 ID 就返回，完成、结构化反问和通知都由事件监视器报告。review 以脱离进程的方式启动，同样由监视器报告。
+**后台启动、用事件代替等待。** task 类任务使用插件原生后台任务，`dispatch` 最多检查启动状态 10 秒，任务进入 running 且已有线程 ID，或任务已结束时提前返回。检查期间失败的任务返回 `STATUS: failed` 和一行 `ERROR:`；后续完成、结构化反问和通知由事件监视器报告。review 以脱离进程的方式启动，同样由监视器报告。
 
 **判断逻辑写进 shell，不靠模型自觉。** review 类任务的分支模式 / 工作区模式 / 兜底三选一，写成了固定脚本，Claude 把任务书原样交给 `codex-worker.sh dispatch`，别的什么都不填。
 

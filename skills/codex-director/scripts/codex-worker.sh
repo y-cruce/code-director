@@ -158,10 +158,40 @@ do_launch() {
 do_collect() {
   WORK="$1"
   if [ -f "$WORK/job" ]; then
-    node "$(cat "$WORK/companion")" status "$(cat "$WORK/job")" --cwd "$(cat "$WORK/cwd")" --json > "$WORK/status.json" 2>/dev/null
-    echo "STATUS: started"
-    echo "JOB: $(cat "$WORK/job")"
-    python3 -c 'import json,sys; s=json.load(open(sys.argv[1])); print("THREAD: " + (s["job"].get("threadId") or ""))' "$WORK/status.json" 2>/dev/null || echo "THREAD: "
+    python3 - "$WORK" <<'PY' || return 1
+import json, pathlib, subprocess, sys, time
+work = pathlib.Path(sys.argv[1])
+cc, job_id, cwd = [(work / name).read_text().strip() for name in ("companion", "job", "cwd")]
+deadline = time.monotonic() + 10
+while True:
+    try:
+        raw = subprocess.check_output(["node", cc, "status", job_id, "--cwd", cwd, "--json"], stderr=subprocess.DEVNULL)
+        job = json.loads(raw)["job"]
+    except (subprocess.CalledProcessError, ValueError, KeyError):
+        # status unavailable: report started as before and let the monitor take over
+        print("STATUS: started\nJOB: " + job_id + "\nTHREAD: ")
+        sys.exit(0)
+    (work / "status.json").write_bytes(raw)
+    status = job["status"]
+    if status not in ("queued", "running") or (status == "running" and job.get("threadId")):
+        break
+    remaining = deadline - time.monotonic()
+    if remaining <= 0:
+        break
+    time.sleep(min(1, remaining))
+failed = status not in ("queued", "running", "completed")
+print("STATUS: " + ("failed" if failed else "started"))
+print("JOB: " + job_id)
+print("THREAD: " + (job.get("threadId") or ""))
+if failed:
+    error = job.get("errorMessage") or ((job.get("result") or {}).get("error") or {}).get("message")
+    if not error:
+        result = subprocess.check_output(["node", cc, "result", job_id, "--cwd", cwd, "--json"], stderr=subprocess.DEVNULL)
+        stored = json.loads(result).get("storedJob") or {}
+        error = stored.get("errorMessage") or ((stored.get("result") or {}).get("error") or {}).get("message")
+    print("ERROR: " + (error or status).splitlines()[0])
+    sys.exit(1)
+PY
   else
     # Detached path (review modes): no job id at launch; the monitor's DONE/FAILED event carries it.
     echo "STATUS: started"; echo "JOB: "; echo "THREAD: "
@@ -192,11 +222,69 @@ do_events() {
   exec node "$CC" events "$@"
 }
 
+do_answer() {
+  local CC cwd="$PWD" args=()
+  while [ "$#" -gt 0 ]; do
+    case "$1" in
+      --cwd) [ "$#" -ge 2 ] || { echo 'usage: --cwd <repo>'; return 1; }; cwd="$2"; shift 2 ;;
+      *) args+=("$1"); shift ;;
+    esac
+  done
+  if [ "${#args[@]}" -ne 3 ]; then
+    echo 'usage: codex-worker.sh answer <job-id> <request-id> <answers-file> [--cwd <repo>]'; return 1
+  fi
+  CC=$(select_companion)
+  node - "$CC" "$cwd" "${args[@]}" <<'NODE'
+const fs = require("node:fs");
+const path = require("node:path");
+const { execFileSync } = require("node:child_process");
+const [cc, cwd, job, request, file] = process.argv.slice(2);
+const prefix = `ANSWER_FAILED job=${job} request=${request}`;
+try {
+  if (!cc) throw new Error("no codex-companion.mjs found under ~/.claude/plugins/cache");
+  const run = (...args) => execFileSync(process.execPath, [cc, ...args, "--cwd", cwd], { encoding: "utf8", stdio: ["ignore", "pipe", "pipe"] });
+  const pending = () => {
+    const live = JSON.parse(run("status", job, "--json")).job.live;
+    if (live?.unavailable) throw new Error(live.unavailable);
+    return live?.questions ?? [];
+  };
+  const requests = pending();
+  const question = requests.find((item) => String(item.requestId) === request);
+  if (!question) {
+    console.log(`${prefix} no pending question with that request id`);
+    if (requests.length) console.log(`pending: ${requests.map((item) => item.requestId).join(" ")}`);
+    process.exit(1);
+  }
+  const answersFile = path.resolve(cwd, file);
+  const answers = JSON.parse(fs.readFileSync(answersFile, "utf8"));
+  if (!answers || typeof answers !== "object" || Array.isArray(answers)) throw new Error("answers file must be a JSON map");
+  const expected = question.questions.map((item) => item.id).sort();
+  const got = Object.keys(answers).sort();
+  if (JSON.stringify(expected) !== JSON.stringify(got)) {
+    console.log(`${prefix} answer keys do not match question ids\nexpected: ${expected.join(" ")}\ngot: ${got.join(" ")}`);
+    process.exit(1);
+  }
+  if (!expected.every((id) => Array.isArray(answers[id]?.answers) && answers[id].answers.length > 0 &&
+    answers[id].answers.every((answer) => typeof answer === "string" && answer.trim()))) {
+    throw new Error("each question requires a nonempty answers array of nonempty strings");
+  }
+  run("answer", job, "--request-id", request, "--answers-file", answersFile);
+  if (pending().some((item) => String(item.requestId) === request)) throw new Error("still pending after answer");
+  console.log(`ANSWERED job=${job} request=${request}`);
+} catch (error) {
+  const detail = String(error.stderr || error.message).trim().split(/\r?\n/)[0];
+  console.log(`${prefix} ${detail}`);
+  process.exit(1);
+}
+NODE
+}
+
 case "${1:-}" in
   dispatch)  do_dispatch "${2:-}" ;;
   launch)    do_launch "$2" ;;
   collect)   do_collect "$2" ;;
   companion) select_companion ;;
   events)    shift; do_events "$@" ;;
-  *) echo "usage: codex-worker.sh dispatch [input-file] | launch <input-file> | collect <WORK> | companion | events --cwd <repo>"; exit 1 ;;
+  answer)    shift; do_answer "$@" ;;
+  *) echo "usage: codex-worker.sh dispatch [input-file] | launch <input-file> | collect <WORK> | companion | events --cwd <repo> | answer <job-id> <request-id> <answers-file> [--cwd <repo>]"; exit 1 ;;
 esac
