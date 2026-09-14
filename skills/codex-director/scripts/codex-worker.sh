@@ -1,15 +1,15 @@
 #!/usr/bin/env bash
 # Shell side of Codex dispatching, called by the director (Claude main thread) from Bash:
 #   codex-worker.sh dispatch [input-file]  read the brief from the file or stdin, start Codex, return at once with
-#                                          STATUS: started / JOB / THREAD (launch + collect in one call)
+#                                          STATUS: started / JOB / NAME / THREAD (launch + collect in one call)
 #   codex-worker.sh events --cwd <repo>    stream job events (one line each) for a Monitor; needs a plugin with `events`
 #   codex-worker.sh companion              print the selected codex-companion.mjs path
 # Building blocks of dispatch, also usable on their own:
 #   codex-worker.sh launch <input-file>    parse the header lines, start Codex, print WORK=... JOB=... STARTED
-#   codex-worker.sh collect <WORK>         print the STATUS / JOB / THREAD lines
+#   codex-worker.sh collect <WORK>         print the STATUS / JOB / NAME / THREAD lines
 #
 # Input file format: `KEY: value` header lines, a blank line, then the brief body.
-# Headers: MODE (investigate|implement|review|adversarial-review|continue), EFFORT, MODEL, BASE, WRITE, THREAD,
+# Headers: NAME (required task name), MODE (investigate|implement|review|adversarial-review|continue), EFFORT, MODEL, BASE, WRITE, THREAD,
 # SIBLINGS, CWD, SANDBOX (full = no sandbox, the default for every task; network = workspace-write plus network
 # access; default = the plugin's own read-only / workspace-write choice).
 set -uo pipefail
@@ -27,13 +27,13 @@ select_companion() {
 # Reads $1 (the input file). Sets the header variables and writes the body to $WORK/brief.md.
 parse_input() {
   local line key val in_header=1
-  MODE=""; EFFORT=""; MODEL=""; BASE=""; WRITE=""; THREAD=""; SIBLINGS=""; CWD=""; SANDBOX=""
+  NAME=""; MODE=""; EFFORT=""; MODEL=""; BASE=""; WRITE=""; THREAD=""; SIBLINGS=""; CWD=""; SANDBOX=""
   : > "$WORK/brief.md"
   while IFS= read -r line || [ -n "$line" ]; do
     if [ "$in_header" = 1 ]; then
       if [ -z "$line" ]; then in_header=0; continue; fi
       case "$line" in
-        MODE:*|EFFORT:*|MODEL:*|BASE:*|WRITE:*|THREAD:*|SIBLINGS:*|CWD:*|SANDBOX:*)
+        NAME:*|MODE:*|EFFORT:*|MODEL:*|BASE:*|WRITE:*|THREAD:*|SIBLINGS:*|CWD:*|SANDBOX:*)
           key=${line%%:*}; val=${line#*:}; val=${val#"${val%%[![:space:]]*}"}
           printf -v "$key" '%s' "$val" ;;
         *) in_header=0; printf '%s\n' "$line" >> "$WORK/brief.md" ;;
@@ -73,11 +73,16 @@ task_effort() {  # $1 default
 do_launch() {
   local input="$1"
   WORK=$(cd "$(dirname "$input")" && pwd)
+  parse_input "$input"
+  if [ -z "$NAME" ]; then
+    echo 'NAME_REQUIRED: add a NAME: header with a few words that say what this task does (for example "worker answer subcommand")'; exit 1
+  fi
+  NAME=$(python3 -c 'import sys; print(sys.argv[1][:80])' "$NAME")
   CC=$(select_companion)
   if [ -z "$CC" ]; then echo "CODEX_FAILED: no codex-companion.mjs found under ~/.claude/plugins/cache"; exit 1; fi
-  parse_input "$input"
   printf '%s\n' "$CC" > "$WORK/companion"
   printf '%s\n' "$CWD" > "$WORK/cwd"
+  printf '%s\n' "$NAME" > "$WORK/name"
 
   local CMD=() FOCUS CAND
   case "$MODE" in
@@ -141,6 +146,12 @@ do_launch() {
     fi
   fi
 
+  if grep -q '"label"' "$CC"; then
+    CMD+=(--label "$NAME")
+  else
+    echo 'NOTE: the installed plugin ignores NAME (no --label support)' >> "$WORK/note"
+  fi
+
   echo "WORK=$WORK"
   if [ "${CMD[2]:-}" = task ] && grep -q 'case "message":' "$CC"; then
     if "${CMD[@]}" --background --json > "$WORK/launch.json" 2> "$WORK/log"; then
@@ -162,6 +173,7 @@ do_collect() {
 import json, pathlib, subprocess, sys, time
 work = pathlib.Path(sys.argv[1])
 cc, job_id, cwd = [(work / name).read_text().strip() for name in ("companion", "job", "cwd")]
+name = (work / "name").read_text().rstrip("\n") if (work / "name").exists() else ""
 deadline = time.monotonic() + 10
 while True:
     try:
@@ -169,7 +181,7 @@ while True:
         job = json.loads(raw)["job"]
     except (subprocess.CalledProcessError, ValueError, KeyError):
         # status unavailable: report started as before and let the monitor take over
-        print("STATUS: started\nJOB: " + job_id + "\nTHREAD: ")
+        print("STATUS: started\nJOB: " + job_id + "\nNAME: " + name + "\nTHREAD: ")
         sys.exit(0)
     (work / "status.json").write_bytes(raw)
     status = job["status"]
@@ -182,6 +194,7 @@ while True:
 failed = status not in ("queued", "running", "completed")
 print("STATUS: " + ("failed" if failed else "started"))
 print("JOB: " + job_id)
+print("NAME: " + name)
 print("THREAD: " + (job.get("threadId") or ""))
 if failed:
     error = job.get("errorMessage") or ((job.get("result") or {}).get("error") or {}).get("message")
@@ -194,7 +207,7 @@ if failed:
 PY
   else
     # Detached path (review modes): no job id at launch; the monitor's DONE/FAILED event carries it.
-    echo "STATUS: started"; echo "JOB: "; echo "THREAD: "
+    echo "STATUS: started"; echo "JOB: "; echo "NAME: $(cat "$WORK/name" 2>/dev/null)"; echo "THREAD: "
     echo "NOTE: started detached without a job id; the monitor's DONE/FAILED event carries it, then read the output with result <job-id>"
   fi
   [ -f "$WORK/note" ] && cat "$WORK/note"
