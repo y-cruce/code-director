@@ -25,13 +25,15 @@ CWD: /abs/path/to/repo
 <brief>
 ```
 
-Then one `Agent` call in the background, `subagent_type` `codex-task`, `description` the task's `NAME`, whose prompt is exactly two lines:
+Then one `Agent` call in the background, `subagent_type` `codex-task`, `description` the task's `NAME`, whose prompt is exactly three lines:
 
 ```
 DISPATCH_FILE: <that file's absolute path>
 CWD: /abs/path/to/repo
+NAME: locate answer validation path
 ```
 
+The agent labels every shell call with that name, so the tasks list shows `Codex · <NAME> · following` instead of a generic activity.
 The brief never passes through the agent's prompt or a shell command, so the task's page shows it nowhere but in your own Write row. The subagent runs `codex-worker.sh dispatch` on that file, then `codex-worker.sh follow <job-id>`, and stays on the job until an event you must act on. Its report (delivered as the agent's completion notification) is machine output: `JOB: <id>`, then one terminal line: `DONE job=<id> [<name>] thread=<id>`, `FAILED job=<id> [<name>] thread=<id> <reason>`, `QUESTION job=<id> [<name>] request=<id> <first question>`, `NOTIFIED job=<id> thread=<id> <note>` or `STALLED job=<id> [<name>] thread=<id> <n>m without progress`. A dispatch that fails at launch comes back as the raw `STATUS: failed` / `ERROR:` output instead; fix the dispatch and spawn again. Put parallel dispatches in one message as separate Agent calls. Do not poll. Keep the agent's id together with the job id, its repository and its thread: you continue the same agent later.
 
 The building block is still there for scripts and headless runs: `bash ~/.claude/skills/codex-director/scripts/codex-worker.sh dispatch <<'INPUT' ... INPUT` returns within seconds with `STATUS: started`, `JOB:`, `NAME:`, `THREAD:` and sometimes a `NOTE:` line, and `codex-worker.sh follow <job-id> --cwd <repo> [--after <cursor>]` blocks and prints the same event stream the subagent reads.
@@ -101,7 +103,7 @@ How it works:
 - A thread belongs to the checkout it was created in. `continue` with `CWD:` pointing at a different worktree is rejected by the plugin (`Thread ... is not tracked for this repository`); to carry the work into a worktree, dispatch a fresh task there with a complete brief.
 - `continue` starts a later turn after the previous job finishes. While the job is still running, use the live controls below instead of dispatching another task.
 - A `continue` brief can be short: state what changed since last time and what to do next. Codex already has the background.
-- Send a `continue` to the problem's existing `codex-task` agent with SendMessage (write the `MODE: continue` dispatch text with `THREAD:` to a new file, then message the agent the same two `DISPATCH_FILE:` / `CWD:` lines) when that agent is still around; its page then holds the whole history of the problem. Spawn a new agent only when it is gone.
+- Send a `continue` to the problem's existing `codex-task` agent with SendMessage (write the `MODE: continue` dispatch text with `THREAD:` to a new file, then message the agent the same three `DISPATCH_FILE:` / `CWD:` / `NAME:` lines) when that agent is still around; its page then holds the whole history of the problem. Spawn a new agent only when it is gone.
 
 On an older plugin, parallel routes are therefore for independent problems or one-shot work, not for a problem you intend to keep iterating on.
 

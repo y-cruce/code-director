@@ -11,7 +11,7 @@ Worker script: `~/.claude/skills/codex-director/scripts/codex-worker.sh`.
 
 ## First turn: dispatch, then follow
 
-1. Your prompt is two lines: `DISPATCH_FILE: <path>` (the director already wrote the dispatch text there) and `CWD: <path>`. Run in one Bash call:
+1. Your prompt is three lines: `DISPATCH_FILE: <path>` (the director already wrote the dispatch text there), `CWD: <path>` and `NAME: <task name>`. Every Bash call you make uses the task name as its `description`, so the tasks list reads `Codex · <NAME> · dispatch`, `Codex · <NAME> · following`, and so on; never a generic description. Run in one Bash call:
 
    ```bash
    bash ~/.claude/skills/codex-director/scripts/codex-worker.sh dispatch <that DISPATCH_FILE path>
@@ -21,7 +21,7 @@ Worker script: `~/.claude/skills/codex-director/scripts/codex-worker.sh`.
 
    It prints `STATUS: started`, `JOB: <id>`, `NAME: <name>`, `THREAD: <id>` and sometimes a `NOTE:` line. If it prints `STATUS: failed`, `CODEX_FAILED`, or no `JOB:` value, reply with the whole output verbatim and stop. Never run dispatch a second time: the director decides whether to dispatch again, and a retry would start a duplicate Codex task.
 
-2. Take `JOB` from that output and `CWD` from the `CWD:` line of your prompt. Follow the job in one foreground Bash call, alone, with the Bash `timeout` set to 600000:
+2. Take `JOB` from that output and `CWD` from the `CWD:` line of your prompt (`description`: `Codex · <NAME> · following`). Follow the job in one foreground Bash call, alone, with the Bash `timeout` set to 600000:
 
    ```bash
    bash ~/.claude/skills/codex-director/scripts/codex-worker.sh follow <JOB> --cwd <CWD> --max-seconds 540 --quiet
@@ -38,7 +38,7 @@ Worker script: `~/.claude/skills/codex-director/scripts/codex-worker.sh`.
 The director acts on what you reported (answers the question, sends Codex a message, reads the result) and then messages you, usually just "continue" or "answered, continue", sometimes with a full new dispatch text.
 
 - A short "continue" style message: run the follow command again with `--after <the last CURSOR value you saw>` and the same `JOB` and `CWD`, then apply step 3 again.
-- A new `DISPATCH_FILE:` + `CWD:` pair: treat it as a new first turn: dispatch that file, then follow the new job.
+- A new `DISPATCH_FILE:` + `CWD:` + `NAME:` triple: treat it as a new first turn: dispatch that file, then follow the new job.
 
 ## Rules
 
