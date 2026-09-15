@@ -2,6 +2,9 @@
 # Shell side of Codex dispatching, called by the director (Claude main thread) from Bash:
 #   codex-worker.sh dispatch [input-file]  read the brief from the file or stdin, start Codex, return at once with
 #                                          STATUS: started / JOB / NAME / THREAD (launch + collect in one call)
+#   codex-worker.sh follow <job-id> --cwd <repo> [--after <cursor>] [--max-seconds <n>] [--until done]
+#                                          block and print the job's event stream until something the director must act on
+#                                          (DONE/FAILED/QUESTION/NOTIFIED/STALLED/TIMEOUT); run by the codex-task subagent
 #   codex-worker.sh events --cwd <repo>    stream job events (one line each) for a Monitor; needs a plugin with `events`
 #   codex-worker.sh companion              print the selected codex-companion.mjs path
 # Building blocks of dispatch, also usable on their own:
@@ -21,6 +24,7 @@ select_companion() {
   for f in $(ls ~/.claude/plugins/cache/*/codex/*/scripts/codex-companion.mjs 2>/dev/null | sort -V); do grep -q '"thread"' "$f" && cc="$f"; done
   for f in $(ls ~/.claude/plugins/cache/*/codex/*/scripts/codex-companion.mjs 2>/dev/null | sort -V); do grep -q 'case "message":' "$f" && cc="$f"; done
   for f in $(ls ~/.claude/plugins/cache/*/codex/*/scripts/codex-companion.mjs 2>/dev/null | sort -V); do grep -q 'case "events":' "$f" && cc="$f"; done
+  for f in $(ls ~/.claude/plugins/cache/*/codex/*/scripts/codex-companion.mjs 2>/dev/null | sort -V); do grep -q 'case "observe":' "$f" && cc="$f"; done
   printf '%s\n' "$cc"
 }
 
@@ -216,12 +220,14 @@ PY
 
 # dispatch [input-file]: launch, then collect. The brief comes from the file or from stdin.
 do_dispatch() {
-  local input="${1:-}"
+  local input="${1:-}" launched
   if [ -z "$input" ]; then
     input=$(mktemp -d "${TMPDIR:-/tmp}/codex-worker.XXXXXX")/input.md
     cat > "$input"
   fi
-  do_launch "$input"
+  # launch prints WORK= / JOB= / STARTED for the building-block flow; dispatch reports only collect's lines.
+  launched=$(do_launch "$input") || { printf '%s\n' "$launched"; return 1; }
+  WORK=$(printf '%s\n' "$launched" | sed -n 's/^WORK=//p')
   do_collect "$WORK"
 }
 
@@ -233,6 +239,16 @@ do_events() {
     exit 2
   fi
   exec node "$CC" events "$@"
+}
+
+do_follow() {
+  local CC
+  CC=$(select_companion)
+  if [ -z "$CC" ] || ! grep -q '"observe"' "$CC"; then
+    echo "FOLLOW_UNSUPPORTED: the installed plugin has no observe subcommand; install a plugin version that has it"
+    exit 2
+  fi
+  exec node "$CC" observe follow "$@"
 }
 
 do_answer() {
@@ -298,6 +314,7 @@ case "${1:-}" in
   collect)   do_collect "$2" ;;
   companion) select_companion ;;
   events)    shift; do_events "$@" ;;
+  follow)    shift; do_follow "$@" ;;
   answer)    shift; do_answer "$@" ;;
   *) echo "usage: codex-worker.sh dispatch [input-file] | launch <input-file> | collect <WORK> | companion | events --cwd <repo> | answer <job-id> <request-id> <answers-file> [--cwd <repo>]"; exit 1 ;;
 esac
