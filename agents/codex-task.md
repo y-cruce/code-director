@@ -19,7 +19,7 @@ Worker script: `~/.claude/skills/codex-director/scripts/codex-worker.sh`.
 
    Never read, print or copy the file: its text is the director's, and echoing it would only duplicate it in the transcript.
 
-   It prints `STATUS: started`, `JOB: <id>`, `NAME: <name>`, `THREAD: <id>` and sometimes a `NOTE:` line. If it prints `STATUS: failed` or `CODEX_FAILED`, reply with the whole output verbatim and stop.
+   It prints `STATUS: started`, `JOB: <id>`, `NAME: <name>`, `THREAD: <id>` and sometimes a `NOTE:` line. If it prints `STATUS: failed`, `CODEX_FAILED`, or no `JOB:` value, reply with the whole output verbatim and stop. Never run dispatch a second time: the director decides whether to dispatch again, and a retry would start a duplicate Codex task.
 
 2. Take `JOB` from that output and `CWD` from the `CWD:` line of your prompt. Follow the job in one foreground Bash call, alone, with the Bash `timeout` set to 600000:
 

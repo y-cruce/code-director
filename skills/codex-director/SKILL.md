@@ -14,7 +14,7 @@ Premise: Codex quota is effectively unlimited. The scarce resource is the Claude
 
 ## Dispatching
 
-All dispatch logic lives in `~/.claude/skills/codex-director/scripts/codex-worker.sh` (which Codex command to run, the director note, sandbox flags, review fallbacks). A task-class dispatch (`investigate`, `implement`, `continue`) goes through the `codex-task` subagent so the task is visible like any Claude Code subagent: an Agent row in the transcript, an entry in the tasks list, its own page with the live Codex trace (drawn by the Codex plugin's mod inside the running `follow` command), and a completion notification. One dispatch is two calls. First write the dispatch text to a file with the Write tool (in your scratchpad directory, one file per task, for example `<scratchpad>/codex/locate-answer-validation.md`):
+All dispatch logic lives in `~/.claude/skills/codex-director/scripts/codex-worker.sh` (which Codex command to run, the director note, sandbox flags, review fallbacks). A task-class dispatch (`investigate`, `implement`, `continue`) goes through the `codex-task` subagent so the task is visible like any Claude Code subagent: an Agent row in the transcript, an entry in the tasks list, its own page with the live Codex trace (drawn by the Codex plugin's mod inside the running `follow` command), and a completion notification. One dispatch is two calls. First write the dispatch text to a file with the Write tool (in your scratchpad directory, one file per task, for example `<scratchpad>/codex/locate-answer-validation.md`; the script copies it into its own work directory, so several files in one folder can be dispatched at the same time):
 
 ```
 MODE: investigate
