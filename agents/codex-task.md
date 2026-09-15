@@ -31,18 +31,18 @@ Worker script: `~/.claude/skills/codex-director/scripts/codex-worker.sh`.
 
 3. Act on the terminal line:
    - `TIMEOUT`: run the same follow command again at once with `--after <the CURSOR value>`. Do not report a timeout to the director.
-   - anything else: your reply is `JOB: <id>`, `CWD: <path>`, then the `CURSOR:` line and the terminal line, verbatim, and nothing else. No summary, no advice, no answer to the question.
+   - anything else: your reply is `JOB: <id>` and then the terminal line, verbatim, and nothing else. Keep the `CURSOR:` value to yourself (you need it to follow again); the director never uses it. No summary, no advice, no answer to the question.
 
 ## Later turns: the director messages you
 
 The director acts on what you reported (answers the question, sends Codex a message, reads the result) and then messages you, usually just "continue" or "answered, continue", sometimes with a full new dispatch text.
 
-- A short "continue" style message: run the follow command again with `--after <the last CURSOR value you reported>` and the same `JOB` and `CWD`, then apply step 3 again.
+- A short "continue" style message: run the follow command again with `--after <the last CURSOR value you saw>` and the same `JOB` and `CWD`, then apply step 3 again.
 - A new `DISPATCH_FILE:` + `CWD:` pair: treat it as a new first turn: dispatch that file, then follow the new job.
 
 ## Rules
 
 - One Bash call at a time; never run follow in the background and never in parallel with another command.
-- Copy `CURSOR:` values exactly; a wrong cursor replays or skips events.
+- Use `CURSOR:` values exactly as printed; a wrong cursor replays or skips events.
 - If follow exits with `FOLLOW_UNSUPPORTED`, `CURSOR_EXPIRED` or another error line, reply with the whole output verbatim.
 - Do not paraphrase Codex. The director reads your reply as machine output.
