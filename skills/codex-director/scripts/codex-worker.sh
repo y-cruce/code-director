@@ -76,8 +76,11 @@ task_effort() {  # $1 default
 
 do_launch() {
   local input="$1"
-  WORK=$(cd "$(dirname "$input")" && pwd)
-  parse_input "$input"
+  # Every launch gets its own work directory: several dispatch files may sit in one
+  # folder and be launched at the same time, so nothing is written next to the input.
+  WORK=$(mktemp -d "${TMPDIR:-/tmp}/codex-worker.XXXXXX")
+  cp "$input" "$WORK/input.md"
+  parse_input "$WORK/input.md"
   if [ -z "$NAME" ]; then
     echo 'NAME_REQUIRED: add a NAME: header with a few words that say what this task does (for example "worker answer subcommand")'; exit 1
   fi
@@ -178,6 +181,9 @@ import json, pathlib, subprocess, sys, time
 work = pathlib.Path(sys.argv[1])
 cc, job_id, cwd = [(work / name).read_text().strip() for name in ("companion", "job", "cwd")]
 name = (work / "name").read_text().rstrip("\n") if (work / "name").exists() else ""
+if not job_id:
+    print("STATUS: failed\nJOB: \nNAME: " + name + "\nTHREAD: \nERROR: launch returned no job id; dispatch again")
+    sys.exit(1)
 deadline = time.monotonic() + 10
 while True:
     try:
