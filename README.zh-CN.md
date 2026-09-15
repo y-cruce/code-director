@@ -8,12 +8,13 @@
 
 ## 做了什么
 
-三个文件加一段配置：
+四个文件加一段配置：
 
 | 文件 | 作用 |
 |---|---|
 | `skills/codex-director/SKILL.md` | 给 Claude 主线程的工作规则：什么活派出去、任务书怎么写、并行怎么派、review 循环怎么跑 |
-| `skills/codex-director/scripts/codex-worker.sh` | 全部派单逻辑：按 MODE 选 Codex 命令、加上给 Codex 的调度者说明、通过插件的 `codex-companion.mjs` 启动、等待、收集；`dispatch` 一次调用启动一个任务，`events` 给主会话的监视器输出任务事件 |
+| `skills/codex-director/scripts/codex-worker.sh` | 全部派单逻辑：按 MODE 选 Codex 命令、加上给 Codex 的调度者说明、通过插件的 `codex-companion.mjs` 启动、等待、收集；`dispatch` 一次调用启动一个任务，`follow` 阻塞跟随一个任务的事件流直到主会话需要出手，`events` 给监视器输出任务事件 |
+| `agents/codex-task.md` | 承载一个 Codex 任务的子 agent：先 `dispatch` 再 `follow`，把每个需要主会话处理的事件原样交回。有了它，Codex 任务看起来就和 Claude Code 的子 agent 一样：对话里一行、任务列表里一项、可以点开的独立页面里是 Codex 的实时轨迹、完成时有通知 |
 | `docs/claude-md-snippet.md` | 加进 `CLAUDE.md` 的路由规则，保证相关任务每次都走这条路 |
 
 工作流程：
@@ -22,24 +23,23 @@
 sequenceDiagram
     participant U as 用户
     participant C as Claude 主线程
-    participant M as 事件监视器（codex-worker.sh events）
+    participant A as codex-task 子 agent（每个任务一个）
     participant X as Codex
 
     U->>C: 描述需求
     C->>C: 加载 codex-director，写任务书
-    C->>M: 每个仓库常驻一个监视器
-    par 并行派发，每路一次 Bash 调用 codex-worker.sh dispatch
-        C->>X: MODE: implement
-        C->>X: MODE: investigate
+    par 并行派发，每路一次后台 Agent 调用
+        C->>A: MODE: implement
+        C->>A: MODE: investigate
     end
-    Note over C: 每次派发几秒内返回 STATUS: started、JOB、THREAD
-    M-->>C: DONE job=...（每个事件一行，还有 QUESTION、NOTIFIED、FAILED、STALLED）
-    C->>X: 用 result <job-id> 读取结果
-    C->>X: MODE: adversarial-review
-    M-->>C: DONE
-    C->>X: MODE: continue, WRITE: yes（让 Codex 自己修）
-    M-->>C: DONE
-    C->>C: 跑测试、抽查 文件:行号、停掉监视器
+    A->>X: codex-worker.sh dispatch，然后 follow <job-id>
+    Note over A: 正在运行的 follow 命令就是任务页面，插件的 mod 在里面画 Codex 实时轨迹
+    A-->>C: DONE job=... + 结果（或 QUESTION、NOTIFIED、STALLED、FAILED），作为 agent 的汇报
+    C->>A: 回答或处理后发 "continue"（同一页面继续）
+    C->>X: MODE: adversarial-review（脱离进程，由事件监视器报告）
+    C->>A: MODE: continue, WRITE: yes（让 Codex 自己修，同一 agent、同一线程）
+    A-->>C: DONE
+    C->>C: 跑测试、抽查 文件:行号
     C->>U: 汇报
 ```
 
@@ -53,7 +53,7 @@ sequenceDiagram
 |---|---|---|
 | 触发方式 | 用户手动 `/codex:rescue`，或 Claude 卡住时求助 | Claude 按规则默认派发，用户不用提 Codex |
 | 默认是否改文件 | 默认 `--write` | 按 MODE 决定：investigate 只读，implement 才写 |
-| 长任务 | 前台等待，超过 Claude Code 的 Bash 上限（10 分钟）会被杀 | 后台启动、立即返回，由事件监视器报告完成，Codex 跑多久都行 |
+| 长任务 | 前台等待，超过 Claude Code 的 Bash 上限（10 分钟）会被杀 | 后台启动，`codex-task` 子 agent 以 9 分钟一段接力跟随并汇报每个需要处理的事件，Codex 跑多久都行 |
 | review 输入 | 工作区模式会把每个未跟踪文件的内容塞进提示词，未跟踪文件多的仓库会超出 Codex 输入上限 | 有基准分支就走分支模式；没有就数未跟踪文件，超过 3 个自动改用只读 task 做 review |
 | 输出 | 原样 | 原样，用 `result <job-id>` 读取 |
 | 语言 | 英文 | 所有提示词和规则都是英文，不会强制 Codex 或 Claude 用某种语言回复 |
@@ -94,7 +94,7 @@ cd codex-director
 review 一下这个分支的改动
 ```
 
-Claude 会加载 codex-director，写任务书，派给 Codex，等监视器的事件，抽查，汇报。你也可以直接点名：「用 codex 查一下 X」。
+Claude 会加载 codex-director，写任务书，用它派出一个 `codex-task` 子 agent，处理 agent 的汇报，抽查，汇报。你也可以直接点名：「用 codex 查一下 X」。
 
 ### 任务书格式
 
@@ -149,7 +149,9 @@ Codex 在跑的时候，执行 `/codex:status` 能看到本仓库正在跑和最
 
 从 Bash 回答时，用 `codex-worker.sh answer <job-id> <request-id> <answers-file> --cwd <repo>`。脚本发送前核对待回答请求、准确的问题 ID 和非空回答，发送后再次检查状态；成功输出 `ANSWERED job=<id> request=<id>`，失败输出 `ANSWER_FAILED` 和原因并以退出码 1 结束。`--cwd` 可放在 `answer` 后任意位置，缺省为当前目录；回答文件的相对路径按该目录解析。
 
-**每个仓库一个事件监视器。** 主会话对每个仓库用 Claude Code 的 Monitor 工具常驻运行一次 `codex-worker.sh events --cwd <仓库>`，每个任务用一次 Bash 调用 `codex-worker.sh dispatch` 启动，检查启动状态后返回。之后每个任务事件都以一行文字直接进入主会话：`DONE`、`FAILED`、`QUESTION`、`QUESTION_PENDING`、`NOTIFIED`、`STALLED`。问题未回答时，插件每 2 分钟重复发送一次 `QUESTION_PENDING`。全程不需要子 agent，所有任务共用一条通道。事件流本身也会在连续一小时没有活跃任务后自行退出，最后打印一行 `IDLE_EXIT`，主会话忘了停的监视器不会再空转好几天。
+**每个任务一个子 agent，整个生命周期用同一个页面。** 主会话先把任务书写成文件，再为每个任务派一个后台 `codex-task` agent，它的提示只有文件路径和仓库目录。它先对该文件跑 `codex-worker.sh dispatch`，再阻塞在 `codex-worker.sh follow <job-id>` 上；`follow` 安静等待（实时轨迹由插件的 mod 画在这一行上），在主会话需要出手时退出：`DONE`、`FAILED`、`QUESTION`、`NOTIFIED`、`STALLED`，前面都有一行 `CURSOR:`。agent 的汇报就是这几行原文；结果由主会话用 `result <job-id>` 读取，不经过 agent 的上下文。主会话通过插件的 `answer` / `message` 回答或处理，再给 agent 发 `continue`，它从游标继续跟随，不重放也不漏，任务始终是同一个页面。Bash 的 10 分钟上限在 agent 内部处理（`follow --max-seconds 540`，再 `--after <cursor>`）。
+
+**事件监视器仍然可用。** `codex-worker.sh events --cwd <仓库>` 给 Claude Code 的 Monitor 输出同一套事件（`DONE`、`FAILED`、`QUESTION`、`QUESTION_PENDING`、`NOTIFIED`、`STALLED`），是 review 类任务（脱离进程启动、没有任务 ID）和 headless 运行的通道。问题未回答时，插件每 2 分钟重复发送一次 `QUESTION_PENDING`。事件流在连续一小时没有活跃任务后自行退出，最后打印一行 `IDLE_EXIT`。
 
 Codex 知道自己是被谁启动的。`investigate` 和 `implement` 两种模式下，worker 脚本会在任务书前面加一段固定说明：你是由调度代理启动的，不是人类；`request_user_input` 的提问由调度代理回答；同一工作区可能还有其他 Codex 任务在跑（名单来自主会话派单时的 `SIBLINGS:` 头），不要自行协调，有事告诉调度代理。插件支持 `notify_director` 工具时，Codex 还可以在不停下来的情况下给调度代理发一句话，以 `NOTIFIED` 事件送达，任务继续跑。Codex 任务之间不直接对话，全部由主会话中转。
 
@@ -165,7 +167,7 @@ Codex 知道自己是被谁启动的。`investigate` 和 `implement` 两种模�
 
 **并行改文件用 worktree。** 同一个 checkout 里同时只跑一路 `implement`。要让 Codex 用两种方案各写一版，给每一路建一个 `git worktree` 并写进 `CWD:`，各改各的，Claude 最后挑。
 
-**后台启动、用事件代替等待。** task 类任务使用插件原生后台任务，`dispatch` 最多检查启动状态 10 秒，任务进入 running 且已有线程 ID，或任务已结束时提前返回。检查期间失败的任务返回 `STATUS: failed` 和一行 `ERROR:`；后续完成、结构化反问和通知由事件监视器报告。review 以脱离进程的方式启动，同样由监视器报告。
+**后台启动、用事件代替等待。** task 类任务使用插件原生后台任务，`dispatch` 最多检查启动状态 10 秒，任务进入 running 且已有线程 ID，或任务已结束时提前返回。检查期间失败的任务返回 `STATUS: failed` 和一行 `ERROR:`；后续完成、结构化反问和通知经 `codex-task` 子 agent 的 `follow` 回到主会话。review 以脱离进程的方式启动，由事件监视器报告。
 
 **判断逻辑写进 shell，不靠模型自觉。** review 类任务的分支模式 / 工作区模式 / 兜底三选一，写成了固定脚本，Claude 把任务书原样交给 `codex-worker.sh dispatch`，别的什么都不填。
 
