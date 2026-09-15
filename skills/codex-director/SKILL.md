@@ -14,29 +14,43 @@ Premise: Codex quota is effectively unlimited. The scarce resource is the Claude
 
 ## Dispatching
 
-All dispatch logic lives in `~/.claude/skills/codex-director/scripts/codex-worker.sh` (which Codex command to run, the director note, sandbox flags, review fallbacks). With the event monitor (below) you call that script directly from one foreground Bash call; no subagent is involved. Each dispatch is one call:
+All dispatch logic lives in `~/.claude/skills/codex-director/scripts/codex-worker.sh` (which Codex command to run, the director note, sandbox flags, review fallbacks). A task-class dispatch (`investigate`, `implement`, `continue`) goes through the `codex-task` subagent so the task is visible like any Claude Code subagent: an Agent row in the transcript, an entry in the tasks list, its own page with the live Codex trace (drawn by the Codex plugin's mod inside the running `follow` command), and a completion notification. One dispatch is two calls. First write the dispatch text to a file with the Write tool (in your scratchpad directory, one file per task, for example `<scratchpad>/codex/locate-answer-validation.md`):
 
-```bash
-bash ~/.claude/skills/codex-director/scripts/codex-worker.sh dispatch <<'INPUT'
+```
 MODE: investigate
 NAME: locate answer validation path
 EFFORT: high
 CWD: /abs/path/to/repo
 
 <brief>
-INPUT
 ```
 
-It returns within seconds with `STATUS: started`, `JOB: <id>`, `NAME: <name>`, `THREAD: <id>` (possibly empty), and sometimes a `NOTE:` line; the monitor reports everything after that. A job that dies right after launch comes back as `STATUS: failed` with an `ERROR:` line instead; read it and fix the dispatch, nothing will follow from the monitor. Put parallel dispatches in one message as separate Bash calls. Do not poll.
+Then one `Agent` call in the background, `subagent_type` `codex-task`, `description` the task's `NAME`, whose prompt is exactly two lines:
+
+```
+DISPATCH_FILE: <that file's absolute path>
+CWD: /abs/path/to/repo
+```
+
+The brief never passes through the agent's prompt or a shell command, so the task's page shows it nowhere but in your own Write row. The subagent runs `codex-worker.sh dispatch` on that file, then `codex-worker.sh follow <job-id>`, and stays on the job until an event you must act on. Its report (delivered as the agent's completion notification) is machine output: `JOB: <id>`, `CWD: <path>`, a `CURSOR: <value>` line, then one terminal line: `DONE job=<id> [<name>] thread=<id>`, `FAILED job=<id> [<name>] thread=<id> <reason>`, `QUESTION job=<id> [<name>] request=<id> <first question>`, `NOTIFIED job=<id> thread=<id> <note>` or `STALLED job=<id> [<name>] thread=<id> <n>m without progress`. A dispatch that fails at launch comes back as the raw `STATUS: failed` / `ERROR:` output instead; fix the dispatch and spawn again. Put parallel dispatches in one message as separate Agent calls. Do not poll. Keep the agent's id together with the job id, its repository and its thread: you continue the same agent later.
+
+The building block is still there for scripts and headless runs: `bash ~/.claude/skills/codex-director/scripts/codex-worker.sh dispatch <<'INPUT' ... INPUT` returns within seconds with `STATUS: started`, `JOB:`, `NAME:`, `THREAD:` and sometimes a `NOTE:` line, and `codex-worker.sh follow <job-id> --cwd <repo> [--after <cursor>]` blocks and prints the same event stream the subagent reads.
 
 A Codex task may run for any length of time. Do not re-dispatch because it is taking long. `/codex:status` lists jobs and `/codex:status <job-id>` shows pending messages, questions, notifications, and interruption state.
 
-### Waiting: one event monitor per session
+### Waiting: the subagent reports, you act, you send it back
 
-1. Before the first dispatch into a repository, arm one Monitor with `persistent: true` and the command `bash ~/.claude/skills/codex-director/scripts/codex-worker.sh events --cwd <repo>` (description: "Codex job events in <repo>"). One monitor per repository, and a worktree counts as its own repository: arm a monitor for the worktree path before the first dispatch with that `CWD:`. The stream only reports jobs it sees running; a job that fails within seconds of a dispatch made before its monitor existed is never reported, and you would wait for nothing. Note its task id: the monitor is yours to stop.
-2. Dispatch with the `dispatch` subcommand shown above. Review modes start detached and return an empty `JOB:`; their job id arrives in the monitor's `DONE` or `FAILED` line.
-3. Each line the monitor emits is one event and arrives on its own schedule; it is not user input. Lines: `DONE job=<id> [<name>] thread=<id>`, `FAILED job=<id> [<name>] thread=<id> <reason>`, `QUESTION job=<id> [<name>] request=<id> <first question>`, `NOTIFIED job=<id> thread=<id> <note>`, `STALLED job=<id> [<name>] thread=<id> <n>m without progress`, `QUESTION_PENDING job=<id> [<name>] request=<id> <n>m unanswered, expires in <m>m: <first question>` (repeated every 2 minutes while a question is unanswered; each one means your answer has not reached Codex yet). The bracketed name is the `NAME:` you gave at dispatch; use it, not the job id, when you tell the user which task an event belongs to. On `DONE` run `node "$(bash ~/.claude/skills/codex-director/scripts/codex-worker.sh companion)" result <job-id> --cwd <repo>` in a foreground Bash call and judge the output as usual. On `QUESTION` run `status <job-id> --cwd <repo> --json` on the same companion to read the questions, then answer (below). On `NOTIFIED` react (below). On `STALLED`, or when an active job has produced no event for about 15 minutes, run `status <job-id>` at once and look at the owner process and the time of the last progress entry; a job whose owner has exited is dead even if the store still says running, so report it and re-dispatch instead of waiting. Never let a silent job sit unchecked for an hour. Nothing else needs re-dispatching; the monitor keeps reporting.
-4. **Stop the monitor when the work is done.** Once every job you dispatched has reported `DONE` or `FAILED` and you are writing the final report to the user, call TaskStop on the monitor's task id. A monitor left running after the task is finished sits in the user's session for hours doing nothing useful. Arm a new one at the next dispatch; arming is one call. As a backstop the event stream exits on its own after an hour with no active job, ending with an `IDLE_EXIT` line (plugins older than that keep polling forever); an `IDLE_EXIT` means the channel closed, not that a job failed, so the next dispatch needs a fresh monitor.
+The `codex-task` agent ends its turn whenever the job produced something you must act on, and its report reaches you as that agent's completion notification. Each report is one event and arrives on its own schedule; it is not user input. The bracketed name in the terminal line is the `NAME:` you gave at dispatch; use it, not the job id, when you tell the user which task an event belongs to.
+
+- `DONE`: run `node "$(bash ~/.claude/skills/codex-director/scripts/codex-worker.sh companion)" result <job-id> --cwd <repo>` in a foreground Bash call and judge the output as usual (the agent follows with `--quiet`, so the result never passes through its context). The agent stays available for a `continue` on the same problem (below).
+- `QUESTION`: run `status <job-id> --cwd <repo> --json` on the same companion to read the questions, answer them (below), then SendMessage the agent `answered, continue`. It follows the job again from its cursor; the same page continues.
+- `NOTIFIED`: react (below), then SendMessage the agent `continue`. The job never paused.
+- `STALLED`: run `status <job-id>` at once and look at the owner process and the time of the last progress entry; a job whose owner has exited is dead even if the store still says running, so report it and re-dispatch instead of waiting. If it is alive, SendMessage the agent `continue`. Never let a silent job sit unchecked for an hour.
+- `FAILED`: report the reason to the user; the agent is done with that job.
+
+A job's history is kept whole, so a `continue` message after any of these replays nothing and skips nothing. The agent handles Bash's 10-minute limit itself (it re-follows on `TIMEOUT` without telling you), and it never answers Codex on your behalf.
+
+Alternative when the Agent tool is not available (SDK, headless) or for review modes, which start detached without a job id: arm one Monitor per repository with the command `bash ~/.claude/skills/codex-director/scripts/codex-worker.sh events --cwd <repo>` (description: "Codex job events in <repo>"; a worktree counts as its own repository) before the first dispatch there, dispatch with the `dispatch` subcommand, and read the same event lines from the monitor (`DONE`, `FAILED`, `QUESTION`, `NOTIFIED`, `STALLED`, plus `QUESTION_PENDING job=<id> [<name>] request=<id> <n>m unanswered, expires in <m>m: <first question>` every 2 minutes while a question is unanswered). On `DONE` read the output with `result <job-id>`. Stop the monitor with TaskStop when every job it watched has reported; it also exits on its own after an hour without an active job, ending with `IDLE_EXIT`, after which the next dispatch needs a fresh monitor.
 
 Sandbox: every Codex task runs without a sandbox (full read/write access and network), which is the user's standing policy; codex-worker passes `--sandbox danger-full-access` unless the header says otherwise. Read-only intent for `investigate` is stated in the brief, not enforced by the sandbox, so keep writing "read-only, do not modify files" into investigation briefs. `SANDBOX: network` (workspace-write plus network) or `SANDBOX: default` (the plugin's own read-only / workspace-write choice) narrow it for a single task; use them only when the user asks. On plugins without the `--sandbox` option the task runs in the plugin's default sandbox and cannot open sockets; a Codex report that tests could not run there is not a test failure.
 
@@ -71,7 +85,7 @@ Picking the effort:
 
 ### Review modes and untracked files
 
-Without `BASE`, the plugin uses working-tree mode and inlines the content of every untracked file into the prompt. Repos with many untracked files exceed Codex's input limit and the review fails. Two options:
+Review modes (`review`, `adversarial-review`) do not go through the `codex-task` agent: they start detached with an empty `JOB:`, so dispatch them with the `dispatch` subcommand and read their `DONE` or `FAILED` line from a Monitor (see the alternative above). Without `BASE`, the plugin uses working-tree mode and inlines the content of every untracked file into the prompt. Repos with many untracked files exceed Codex's input limit and the review fails. Two options:
 
 - **Preferred**: commit the change to a branch first and put `BASE: <base branch>` in the header so only the committed diff is compared.
 - If committing is not possible, do nothing special. codex-worker counts untracked files and, above 3, automatically falls back to a read-only task that performs the review, adding a NOTE line to its return. In that case **list the changed files in the brief body** so Codex knows what to look at.
@@ -87,6 +101,7 @@ How it works:
 - A thread belongs to the checkout it was created in. `continue` with `CWD:` pointing at a different worktree is rejected by the plugin (`Thread ... is not tracked for this repository`); to carry the work into a worktree, dispatch a fresh task there with a complete brief.
 - `continue` starts a later turn after the previous job finishes. While the job is still running, use the live controls below instead of dispatching another task.
 - A `continue` brief can be short: state what changed since last time and what to do next. Codex already has the background.
+- Send a `continue` to the problem's existing `codex-task` agent with SendMessage (write the `MODE: continue` dispatch text with `THREAD:` to a new file, then message the agent the same two `DISPATCH_FILE:` / `CWD:` lines) when that agent is still around; its page then holds the whole history of the problem. Spawn a new agent only when it is gone.
 
 On an older plugin, parallel routes are therefore for independent problems or one-shot work, not for a problem you intend to keep iterating on.
 
