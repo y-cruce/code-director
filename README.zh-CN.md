@@ -145,7 +145,9 @@ Codex 在跑的时候，执行 `/codex:status` 能看到本仓库正在跑和最
 
 使用支持实时控制的插件版本时，`/codex:message <job-id> <补充指令>` 会向当前轮追加消息，不必等整轮结束。加 `--interrupt` 会取消当前轮，再由原任务在同一线程执行新指令；已有改动不会自动回滚，也不会改变原任务的写权限。返回的 Git 状态包含原有改动，不能全部归因于 Codex。
 
-自动纠偏时，先把指令写入文件，再 SendMessage 给该任务的 agent：`MESSAGE_FILE: <绝对路径>`，可另加一行 `INTERRUPT: yes`。agent 用自己保存的任务 ID 和仓库路径转发，成功后从游标继续跟随，不打印文件内容。也可以直接运行 `bash ~/.claude/skills/codex-director/scripts/codex-worker.sh message <job-id> <prompt-file> --cwd <repo> [--interrupt]`：成功只输出 `MESSAGED job=<id>`；失败输出 `MESSAGE_FAILED job=<id> <reason>` 并以非零退出码结束；插件不支持时输出 `MESSAGE_UNSUPPORTED:`，退出码为 2。
+自动纠偏时运行 `bash ~/.claude/skills/codex-director/scripts/codex-worker.sh message <job-id> <prompt-file> --cwd <repo> [--interrupt]`：成功只输出 `MESSAGED job=<id>`；失败输出 `MESSAGE_FAILED job=<id> <reason>` 并以非零退出码结束；插件不支持时输出 `MESSAGE_UNSUPPORTED:`，退出码为 2。**需要立即生效的指令一律走这条命令，不要经过 agent。** 宿主会把发给忙碌 agent 的消息排队，且从不打断正在执行的工具，因此发给阻塞在 `follow` 里的 agent 的消息最长要等九分钟；主会话自己的 Bash 调用不受影响。
+
+纠偏可以等到 agent 下一轮再生效时，先把指令写入文件，再 SendMessage 给该任务的 agent：`MESSAGE_FILE: <绝对路径>`，可另加一行 `INTERRUPT: yes`。agent 用自己保存的任务 ID 和仓库路径转发，成功后从游标继续跟随，不打印文件内容。
 
 **发给 agent 的其他内容都会转交 Codex。** 不属于路由指令的文字由 agent 自己写入文件并原样投递，纠偏不会消失在 agent 的收件箱里；内容较长或含代码时仍优先用文件形式。单独的 `continue` 只恢复跟随，开新一轮仍用 `DISPATCH_FILE:` / `CWD:` / `NAME:` 三行。若上次回报是 `QUESTION`，消息必须明确说明已经通过 `answer` 回答，否则返回 `MESSAGE_REFUSED job=<id> question pending, answer it first`，因为结构化反问只能由带问题 ID 的 `answer` 解决。被拒绝时先回答；转发失败时先修复错误或更新插件，再重发。
 

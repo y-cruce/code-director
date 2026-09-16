@@ -111,16 +111,18 @@ On an older plugin, parallel routes are therefore for independent problems or on
 
 ### Live corrections and questions
 
-**Everything you send the task's agent that is not routing goes to Codex.** Choose the channel deliberately:
+**Nothing sent to the agent reaches Codex until the agent's next tool round.** The host queues messages for a busy agent and never interrupts a running tool, and the agent sits inside `follow` for up to nine minutes, so a message you send it can wait that long. Your own Bash calls are not blocked by it. Route by urgency first:
 
 | Intent | Channel |
 |---|---|
-| Change Codex's direction | SendMessage the task's agent `MESSAGE_FILE: <absolute path>` for anything long or structured; short text sent inline is forwarded too |
-| Answer a structured question | `answer` with the request id and exact question ids |
+| Stop or redirect Codex now | Run `codex-worker.sh message <job-id> <prompt-file> --cwd <repo> --interrupt` yourself |
+| End the job now | `cancel <job-id>` on the selected companion, yourself |
+| Answer a structured question | `answer` with the request id and exact question ids, yourself |
+| A correction that can wait for the agent's next round | SendMessage the task's agent `MESSAGE_FILE: <absolute path>` |
 | Keep the agent following | SendMessage `continue` |
 | Start a new round | SendMessage the `DISPATCH_FILE:` / `CWD:` / `NAME:` triple |
 
-Prefer the file: write the correction, then SendMessage `MESSAGE_FILE: <absolute path>` (optionally `INTERRUPT: yes`). The agent supplies its saved job id and repository, forwards the file without reading it, and resumes following after delivery. Inline text is the fallback the agent also forwards, writing it to a file itself; keep it short and free of code, since it passes through a shell heredoc and through the agent's own context. If its last report was `QUESTION`, first answer it and say "Already answered through answer" in the same message, or the agent returns `MESSAGE_REFUSED`.
+For the unhurried path, write the correction to a file and SendMessage `MESSAGE_FILE: <absolute path>` (optionally `INTERRUPT: yes`). The agent supplies its saved job id and repository, forwards the file without reading it, and resumes following after delivery. Everything you send it that is not routing is forwarded as well, inline text included; keep inline text short and free of code, since the agent writes it through a shell heredoc. If its last report was `QUESTION`, first answer it and say "Already answered through answer" in the same message, or the agent returns `MESSAGE_REFUSED`.
 
 For direct Bash delivery, use `bash ~/.claude/skills/codex-director/scripts/codex-worker.sh message <job-id> <prompt-file> --cwd <repo> [--interrupt]`. It prints only `MESSAGED job=<id>` on success, or `MESSAGE_FAILED job=<id> <reason>` on failure; unsupported plugins return `MESSAGE_UNSUPPORTED:` and exit 2. Keep the job ID with its repository and thread. Success means accepted for the next model request, not that the instruction has already been followed. The slash command `/codex:message <job-id> <text>` remains user-facing shorthand. Use the worker for automatic `message` and `answer` calls; `status` and `result` still use the selected companion with `--cwd <repo>`. Do not invoke these commands as skills.
 
