@@ -49,8 +49,7 @@ The `codex-task` agent ends its turn whenever the job produced something you mus
 - `NOTIFIED`: react (below), then SendMessage the agent `continue`. The job never paused.
 - `STALLED`: run `status <job-id>` at once and look at the owner process and the time of the last progress entry; a job whose owner has exited is dead even if the store still says running, so report it and re-dispatch instead of waiting. If it is alive, SendMessage the agent `continue`. Never let a silent job sit unchecked for an hour.
 - `FAILED`: report the reason to the user; the agent is done with that job.
-- `UNROUTED_MESSAGE:`: the text was not forwarded; write the correction to a file and resend it as `MESSAGE_FILE:`.
-- `MESSAGE_REFUSED`: answer the pending structured question with `answer` and its question id first, then resend `MESSAGE_FILE:` stating that it has been answered.
+- `MESSAGE_REFUSED`: answer the pending structured question with `answer` and its question id first, then resend the message stating that it has been answered.
 - `MESSAGE_FAILED` / `MESSAGE_UNSUPPORTED:`: forwarding failed; fix the reported error or update the plugin, then resend `MESSAGE_FILE:`. The agent has stopped following; do not assume delivery.
 
 A job's history is kept whole, so a `continue` message after any of these replays nothing and skips nothing. The agent handles Bash's 10-minute limit itself (it re-follows on `TIMEOUT` without telling you), and it never answers Codex on your behalf.
@@ -112,16 +111,16 @@ On an older plugin, parallel routes are therefore for independent problems or on
 
 ### Live corrections and questions
 
-**Prose sent to the agent does not reach Codex: the agent returns `UNROUTED_MESSAGE:`.** Choose the channel explicitly:
+**Everything you send the task's agent that is not routing goes to Codex.** Choose the channel deliberately:
 
 | Intent | Channel |
 |---|---|
-| Change Codex's direction | SendMessage the task's agent `MESSAGE_FILE: <absolute path>`, or run `codex-worker.sh message` yourself |
+| Change Codex's direction | SendMessage the task's agent `MESSAGE_FILE: <absolute path>` for anything long or structured; short text sent inline is forwarded too |
 | Answer a structured question | `answer` with the request id and exact question ids |
 | Keep the agent following | SendMessage `continue` |
 | Start a new round | SendMessage the `DISPATCH_FILE:` / `CWD:` / `NAME:` triple |
 
-Write corrections to a file, then SendMessage `MESSAGE_FILE: <absolute path>` to the task's agent; it supplies its saved job id and repository and resumes following after delivery. Optionally add `INTERRUPT: yes`. If its last report was `QUESTION`, first answer it and include "Already answered through answer" alongside `MESSAGE_FILE:`. Never put the correction itself in SendMessage.
+Prefer the file: write the correction, then SendMessage `MESSAGE_FILE: <absolute path>` (optionally `INTERRUPT: yes`). The agent supplies its saved job id and repository, forwards the file without reading it, and resumes following after delivery. Inline text is the fallback the agent also forwards, writing it to a file itself; keep it short and free of code, since it passes through a shell heredoc and through the agent's own context. If its last report was `QUESTION`, first answer it and say "Already answered through answer" in the same message, or the agent returns `MESSAGE_REFUSED`.
 
 For direct Bash delivery, use `bash ~/.claude/skills/codex-director/scripts/codex-worker.sh message <job-id> <prompt-file> --cwd <repo> [--interrupt]`. It prints only `MESSAGED job=<id>` on success, or `MESSAGE_FAILED job=<id> <reason>` on failure; unsupported plugins return `MESSAGE_UNSUPPORTED:` and exit 2. Keep the job ID with its repository and thread. Success means accepted for the next model request, not that the instruction has already been followed. The slash command `/codex:message <job-id> <text>` remains user-facing shorthand. Use the worker for automatic `message` and `answer` calls; `status` and `result` still use the selected companion with `--cwd <repo>`. Do not invoke these commands as skills.
 

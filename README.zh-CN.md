@@ -147,7 +147,7 @@ Codex 在跑的时候，执行 `/codex:status` 能看到本仓库正在跑和最
 
 自动纠偏时，先把指令写入文件，再 SendMessage 给该任务的 agent：`MESSAGE_FILE: <绝对路径>`，可另加一行 `INTERRUPT: yes`。agent 用自己保存的任务 ID 和仓库路径转发，成功后从游标继续跟随，不打印文件内容。也可以直接运行 `bash ~/.claude/skills/codex-director/scripts/codex-worker.sh message <job-id> <prompt-file> --cwd <repo> [--interrupt]`：成功只输出 `MESSAGED job=<id>`；失败输出 `MESSAGE_FAILED job=<id> <reason>` 并以非零退出码结束；插件不支持时输出 `MESSAGE_UNSUPPORTED:`，退出码为 2。
 
-**发给 agent 的散文不会到达 Codex。** agent 会返回 `UNROUTED_MESSAGE:`，不继续跟随；请用 `MESSAGE_FILE:` 重发。单独的 `continue` 只恢复跟随，开新一轮仍用 `DISPATCH_FILE:` / `CWD:` / `NAME:` 三行。若上次回报是 `QUESTION`，`MESSAGE_FILE:` 消息必须明确说明已经通过 `answer` 回答，否则返回 `MESSAGE_REFUSED job=<id> question pending, answer it first`。被拒绝时先回答；转发失败时先修复错误或更新插件，再重发。
+**发给 agent 的其他内容都会转交 Codex。** 不属于路由指令的文字由 agent 自己写入文件并原样投递，纠偏不会消失在 agent 的收件箱里；内容较长或含代码时仍优先用文件形式。单独的 `continue` 只恢复跟随，开新一轮仍用 `DISPATCH_FILE:` / `CWD:` / `NAME:` 三行。若上次回报是 `QUESTION`，消息必须明确说明已经通过 `answer` 回答，否则返回 `MESSAGE_REFUSED job=<id> question pending, answer it first`，因为结构化反问只能由带问题 ID 的 `answer` 解决。被拒绝时先回答；转发失败时先修复错误或更新插件，再重发。
 
 遇到结构化反问，主会话会收到 `codex-task` agent 回报的 `QUESTION` 行（监视器路径下则是监视器的一条事件），底层 Codex 仍在等待。主会话以 status 中的问题 ID 为键写入回答 JSON，例如 `{"<question-id>":{"answers":["..."]}}`，再执行 `/codex:answer <job-id> --request-id <id> --answers-file <绝对路径>`。默认等待回答 10 分钟，超时会中断并报告。
 
