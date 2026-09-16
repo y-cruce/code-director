@@ -6,6 +6,8 @@
 #                                          block and print the job's event stream until something the director must act on
 #                                          (DONE/FAILED/QUESTION/NOTIFIED/STALLED/TIMEOUT); run by the codex-task subagent
 #   codex-worker.sh events --cwd <repo>    stream job events (one line each) for a Monitor; needs a plugin with `events`
+#   codex-worker.sh message <job-id> <prompt-file> [--cwd <repo>] [--interrupt]
+#                                          forward a correction; print MESSAGED or MESSAGE_FAILED
 #   codex-worker.sh companion              print the selected codex-companion.mjs path
 # Building blocks of dispatch, also usable on their own:
 #   codex-worker.sh launch <input-file>    parse the header lines, start Codex, print WORK=... JOB=... STARTED
@@ -257,6 +259,40 @@ do_follow() {
   exec node "$CC" observe follow "$@"
 }
 
+do_message() {
+  local CC cwd="$PWD" job="${1:-unknown}" args=() interrupt=()
+  while [ "$#" -gt 0 ]; do
+    case "$1" in
+      --cwd) [ "$#" -ge 2 ] || { echo "MESSAGE_FAILED job=$job usage: --cwd <repo>"; return 1; }; cwd="$2"; shift 2 ;;
+      --interrupt) interrupt=(--interrupt); shift ;;
+      *) args+=("$1"); shift ;;
+    esac
+  done
+  job="${args[0]:-unknown}"
+  if [ "${#args[@]}" -ne 2 ]; then
+    echo "MESSAGE_FAILED job=$job usage: codex-worker.sh message <job-id> <prompt-file> [--cwd <repo>] [--interrupt]"; return 1
+  fi
+  CC=$(select_companion)
+  if [ -z "$CC" ] || ! grep -q 'case "message":' "$CC" 2>/dev/null; then
+    echo "MESSAGE_UNSUPPORTED: the installed plugin has no message subcommand; install a plugin version that has it"
+    return 2
+  fi
+  node - "$CC" "$cwd" "${args[@]}" ${interrupt[@]+"${interrupt[@]}"} <<'NODE'
+const path = require("node:path");
+const { execFileSync } = require("node:child_process");
+const [cc, cwd, job, file, ...flags] = process.argv.slice(2);
+try {
+  execFileSync(process.execPath, [cc, "message", job, "--prompt-file", path.resolve(cwd, file), "--cwd", cwd, ...flags],
+    { encoding: "utf8", stdio: ["ignore", "pipe", "pipe"] });
+  console.log(`MESSAGED job=${job}`);
+} catch (error) {
+  const detail = String(error.stderr || error.message).trim().split(/\r?\n/)[0];
+  console.log(`MESSAGE_FAILED job=${job} ${detail}`);
+  process.exit(1);
+}
+NODE
+}
+
 do_answer() {
   local CC cwd="$PWD" args=()
   while [ "$#" -gt 0 ]; do
@@ -321,6 +357,7 @@ case "${1:-}" in
   companion) select_companion ;;
   events)    shift; do_events "$@" ;;
   follow)    shift; do_follow "$@" ;;
+  message)   shift; do_message "$@" ;;
   answer)    shift; do_answer "$@" ;;
-  *) echo "usage: codex-worker.sh dispatch [input-file] | launch <input-file> | collect <WORK> | companion | events --cwd <repo> | answer <job-id> <request-id> <answers-file> [--cwd <repo>]"; exit 1 ;;
+  *) echo "usage: codex-worker.sh dispatch [input-file] | launch <input-file> | collect <WORK> | companion | events --cwd <repo> | message <job-id> <prompt-file> [--cwd <repo>] [--interrupt] | answer <job-id> <request-id> <answers-file> [--cwd <repo>]"; exit 1 ;;
 esac

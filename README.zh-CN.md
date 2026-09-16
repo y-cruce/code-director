@@ -145,11 +145,15 @@ Codex 在跑的时候，执行 `/codex:status` 能看到本仓库正在跑和最
 
 使用支持实时控制的插件版本时，`/codex:message <job-id> <补充指令>` 会向当前轮追加消息，不必等整轮结束。加 `--interrupt` 会取消当前轮，再由原任务在同一线程执行新指令；已有改动不会自动回滚，也不会改变原任务的写权限。返回的 Git 状态包含原有改动，不能全部归因于 Codex。
 
+自动纠偏时，先把指令写入文件，再 SendMessage 给该任务的 agent：`MESSAGE_FILE: <绝对路径>`，可另加一行 `INTERRUPT: yes`。agent 用自己保存的任务 ID 和仓库路径转发，成功后从游标继续跟随，不打印文件内容。也可以直接运行 `bash ~/.claude/skills/codex-director/scripts/codex-worker.sh message <job-id> <prompt-file> --cwd <repo> [--interrupt]`：成功只输出 `MESSAGED job=<id>`；失败输出 `MESSAGE_FAILED job=<id> <reason>` 并以非零退出码结束；插件不支持时输出 `MESSAGE_UNSUPPORTED:`，退出码为 2。
+
+**发给 agent 的散文不会到达 Codex。** agent 会返回 `UNROUTED_MESSAGE:`，不继续跟随；请用 `MESSAGE_FILE:` 重发。单独的 `continue` 只恢复跟随，开新一轮仍用 `DISPATCH_FILE:` / `CWD:` / `NAME:` 三行。若上次回报是 `QUESTION`，`MESSAGE_FILE:` 消息必须明确说明已经通过 `answer` 回答，否则返回 `MESSAGE_REFUSED job=<id> question pending, answer it first`。被拒绝时先回答；转发失败时先修复错误或更新插件，再重发。
+
 遇到结构化反问，主会话会收到 `codex-task` agent 回报的 `QUESTION` 行（监视器路径下则是监视器的一条事件），底层 Codex 仍在等待。主会话以 status 中的问题 ID 为键写入回答 JSON，例如 `{"<question-id>":{"answers":["..."]}}`，再执行 `/codex:answer <job-id> --request-id <id> --answers-file <绝对路径>`。默认等待回答 10 分钟，超时会中断并报告。
 
 从 Bash 回答时，用 `codex-worker.sh answer <job-id> <request-id> <answers-file> --cwd <repo>`。脚本发送前核对待回答请求、准确的问题 ID 和非空回答，发送后再次检查状态；成功输出 `ANSWERED job=<id> request=<id>`，失败输出 `ANSWER_FAILED` 和原因并以退出码 1 结束。`--cwd` 可放在 `answer` 后任意位置，缺省为当前目录；回答文件的相对路径按该目录解析。
 
-**每个任务一个子 agent，整个生命周期用同一个页面。** 主会话先把任务书写成文件，再为每个任务派一个后台 `codex-task` agent，它的提示只有文件路径和仓库目录。它先对该文件跑 `codex-worker.sh dispatch`，再阻塞在 `codex-worker.sh follow <job-id>` 上；`follow` 安静等待（实时轨迹由插件的 mod 画在这一行上），在主会话需要出手时退出：`DONE`、`FAILED`、`QUESTION`、`NOTIFIED`、`STALLED`，前面都有一行 `CURSOR:`。agent 的汇报只有任务 ID 和这一行终结行，游标留给它自己续跟用；结果由主会话用 `result <job-id>` 读取，不经过 agent 的上下文。主会话通过插件的 `answer` / `message` 回答或处理，再给 agent 发 `continue`，它从游标继续跟随，不重放也不漏，任务始终是同一个页面。Bash 的 10 分钟上限在 agent 内部处理（`follow --max-seconds 540`，再 `--after <cursor>`）。
+**每个任务一个子 agent，整个生命周期用同一个页面。** 主会话先把任务书写成文件，再为每个任务派一个后台 `codex-task` agent，它的提示只有文件路径和仓库目录。它先对该文件跑 `codex-worker.sh dispatch`，再阻塞在 `codex-worker.sh follow <job-id>` 上；`follow` 安静等待（实时轨迹由插件的 mod 画在这一行上），在主会话需要出手时退出：`DONE`、`FAILED`、`QUESTION`、`NOTIFIED`、`STALLED`，前面都有一行 `CURSOR:`。agent 的汇报只有任务 ID 和这一行终结行，游标留给它自己续跟用；结果由主会话用 `result <job-id>` 读取，不经过 agent 的上下文。主会话直接调用 `answer` / `message` 后，分别给 agent 发 `answered, continue` / `continue`；通过 `MESSAGE_FILE:` 转发则自动恢复跟随。它从游标继续跟随，不重放也不漏，任务始终是同一个页面。Bash 的 10 分钟上限在 agent 内部处理（`follow --max-seconds 540`，再 `--after <cursor>`）。
 
 **事件监视器仍然可用。** `codex-worker.sh events --cwd <仓库>` 给 Claude Code 的 Monitor 输出同一套事件（`DONE`、`FAILED`、`QUESTION`、`QUESTION_PENDING`、`NOTIFIED`、`STALLED`），是 review 类任务（脱离进程启动、没有任务 ID）和 headless 运行的通道。问题未回答时，插件每 2 分钟重复发送一次 `QUESTION_PENDING`。事件流在连续一小时没有活跃任务后自行退出，最后打印一行 `IDLE_EXIT`。
 
