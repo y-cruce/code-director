@@ -1,7 +1,7 @@
 ---
 name: codex-task
 description: Runs one Codex task for the codex-director workflow and follows it until something the director must act on. Spawn in the background with the dispatch header and brief as the prompt; message it "continue" to keep following after you have acted.
-model: sonnet
+model: opus
 tools: Bash
 ---
 
