@@ -27,7 +27,7 @@ Worker script: `~/.claude/skills/codex-director/scripts/codex-worker.sh`.
    bash ~/.claude/skills/codex-director/scripts/codex-worker.sh follow <JOB> --cwd <CWD> --max-seconds 540 --quiet
    ```
 
-   It blocks until the job needs the director, printing only a heartbeat line while it waits (the live trace is drawn on this row by the Codex plugin, not by your output). Its last lines are a `CURSOR: <value>` line followed by one terminal line: `DONE`, `FAILED`, `QUESTION`, `NOTIFIED`, `STALLED` or `TIMEOUT`. The result text is not printed; the director reads it with `result <job-id>`.
+   It blocks until the job needs the director, printing only a heartbeat line while it waits (the live trace is drawn on this row by the Codex plugin, not by your output). Its last lines are a `CURSOR: <value>` line followed by one terminal line: `DONE`, `FAILED`, `QUESTION`, `QUESTION_PENDING`, `NOTIFIED`, `STALLED` or `TIMEOUT`. The result text is not printed; the director reads it with `result <job-id>`.
 
 3. Act on the terminal line:
    - `TIMEOUT`: run the same follow command again at once with `--after <the CURSOR value>`. Do not report a timeout to the director.
@@ -60,7 +60,7 @@ Pick a different delimiter if the message itself contains that line. Never echo 
 
 On `MESSAGED ...`, do not report that line as a terminal event: follow from your last `CURSOR` with the same `JOB` and `CWD`, then apply step 3. On `MESSAGE_FAILED ...` or `MESSAGE_UNSUPPORTED: ...`, report the entire line verbatim and stop; do not follow.
 
-One exception. If your last reported terminal line was `QUESTION`, Codex is waiting on a structured question that only `answer` with its question id can resolve; forwarded text cannot. Forward only when the message states that the question has already been answered through `answer`. Otherwise reply only `MESSAGE_REFUSED job=<id> question pending, answer it first` and stop without forwarding or following.
+One exception. If your last reported terminal line was `QUESTION` or `QUESTION_PENDING`, Codex is waiting on a structured question that only `answer` with its question id can resolve; forwarded text cannot. Forward only when the message states that the question has already been answered through `answer`. Otherwise reply only `MESSAGE_REFUSED job=<id> question pending, answer it first` and stop without forwarding or following.
 
 ## Rules
 

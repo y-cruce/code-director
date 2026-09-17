@@ -151,15 +151,15 @@ Codex 在跑的时候，执行 `/codex:status` 能看到本仓库正在跑和最
 
 **发给 agent 的其他内容都会转交 Codex。** 不属于路由指令的文字由 agent 自己写入文件并原样投递，纠偏不会消失在 agent 的收件箱里；内容较长或含代码时仍优先用文件形式。单独的 `continue` 只恢复跟随，开新一轮仍用 `DISPATCH_FILE:` / `CWD:` / `NAME:` 三行。若上次回报是 `QUESTION`，消息必须明确说明已经通过 `answer` 回答，否则返回 `MESSAGE_REFUSED job=<id> question pending, answer it first`，因为结构化反问只能由带问题 ID 的 `answer` 解决。被拒绝时先回答；转发失败时先修复错误或更新插件，再重发。
 
-遇到结构化反问，主会话会收到 `codex-task` agent 回报的 `QUESTION` 行（监视器路径下则是监视器的一条事件），底层 Codex 仍在等待。主会话以 status 中的问题 ID 为键写入回答 JSON，例如 `{"<question-id>":{"answers":["..."]}}`，再执行 `/codex:answer <job-id> --request-id <id> --answers-file <绝对路径>`。默认等待回答 10 分钟，超时会中断并报告。
+遇到结构化反问，主会话会收到 `codex-task` agent 回报的 `QUESTION` 行（监视器路径下则是监视器的一条事件），底层 Codex 仍在等待。同一个 request 只会作为 `QUESTION` 上报一次，而且只在它仍然挂起时上报；已回答的 request 不再重复上报，仍未回答却再次出现的 request 改报 `QUESTION_PENDING`，提示主会话先查状态而不是重答一遍。主会话以 status 中的问题 ID 为键写入回答 JSON，例如 `{"<question-id>":{"answers":["..."]}}`，再执行 `/codex:answer <job-id> --request-id <id> --answers-file <绝对路径>`。默认等待回答 10 分钟，超时会中断并报告。
 
 从 Bash 回答时，用 `codex-worker.sh answer <job-id> <request-id> <answers-file> --cwd <repo>`。脚本发送前核对待回答请求、准确的问题 ID 和非空回答，发送后再次检查状态；成功输出 `ANSWERED job=<id> request=<id>`，失败输出 `ANSWER_FAILED` 和原因并以退出码 1 结束。`--cwd` 可放在 `answer` 后任意位置，缺省为当前目录；回答文件的相对路径按该目录解析。
 
-**每个任务一个子 agent，整个生命周期用同一个页面。** 主会话先把任务书写成文件，再为每个任务派一个后台 `codex-task` agent，它的提示只有文件路径和仓库目录。它先对该文件跑 `codex-worker.sh dispatch`，再阻塞在 `codex-worker.sh follow <job-id>` 上；`follow` 安静等待（实时轨迹由插件的 mod 画在这一行上），在主会话需要出手时退出：`DONE`、`FAILED`、`QUESTION`、`NOTIFIED`、`STALLED`，前面都有一行 `CURSOR:`。agent 的汇报只有任务 ID 和这一行终结行，游标留给它自己续跟用；结果由主会话用 `result <job-id>` 读取，不经过 agent 的上下文。主会话直接调用 `answer` / `message` 后，分别给 agent 发 `answered, continue` / `continue`；通过 `MESSAGE_FILE:` 转发则自动恢复跟随。它从游标继续跟随，不重放也不漏，任务始终是同一个页面。Bash 的 10 分钟上限在 agent 内部处理（`follow --max-seconds 540`，再 `--after <cursor>`）。
+**每个任务一个子 agent，整个生命周期用同一个页面。** 主会话先把任务书写成文件，再为每个任务派一个后台 `codex-task` agent，它的提示只有文件路径和仓库目录。它先对该文件跑 `codex-worker.sh dispatch`，再阻塞在 `codex-worker.sh follow <job-id>` 上；`follow` 安静等待（实时轨迹由插件的 mod 画在这一行上），在主会话需要出手时退出：`DONE`、`FAILED`、`QUESTION`、`QUESTION_PENDING`、`NOTIFIED`、`STALLED`，前面都有一行 `CURSOR:`。agent 的汇报只有任务 ID 和这一行终结行，游标留给它自己续跟用；结果由主会话用 `result <job-id>` 读取，不经过 agent 的上下文。主会话直接调用 `answer` / `message` 后，分别给 agent 发 `answered, continue` / `continue`；通过 `MESSAGE_FILE:` 转发则自动恢复跟随。它从游标继续跟随，不重放也不漏，任务始终是同一个页面。Bash 的 10 分钟上限在 agent 内部处理（`follow --max-seconds 540`，再 `--after <cursor>`）。
 
 **事件监视器仍然可用。** `codex-worker.sh events --cwd <仓库>` 给 Claude Code 的 Monitor 输出同一套事件（`DONE`、`FAILED`、`QUESTION`、`QUESTION_PENDING`、`NOTIFIED`、`STALLED`），是 review 类任务（脱离进程启动、没有任务 ID）和 headless 运行的通道。问题未回答时，插件每 2 分钟重复发送一次 `QUESTION_PENDING`。事件流在连续一小时没有活跃任务后自行退出，最后打印一行 `IDLE_EXIT`。
 
-Codex 知道自己是被谁启动的。`investigate` 和 `implement` 两种模式下，worker 脚本会在任务书前面加一段固定说明：你是由调度代理启动的，不是人类；`request_user_input` 的提问由调度代理回答；同一工作区可能还有其他 Codex 任务在跑（名单来自主会话派单时的 `SIBLINGS:` 头），不要自行协调，有事告诉调度代理。插件支持 `notify_director` 工具时，Codex 还可以在不停下来的情况下给调度代理发一句话，以 `NOTIFIED` 事件送达，任务继续跑。Codex 任务之间不直接对话，全部由主会话中转。
+Codex 知道自己是被谁启动的。`investigate` 和 `implement` 两种模式下，worker 脚本会在任务书前面加一段固定说明：你是由调度代理启动的，不是人类；`request_user_input` 的提问由调度代理回答；同一工作区可能还有其他 Codex 任务在跑（名单来自主会话派单时的 `SIBLINGS:` 头），不要自行协调，有事告诉调度代理。插件支持 `notify_director` 工具时，Codex 还可以在不停下来的情况下给调度代理发一句话，以 `NOTIFIED` 事件送达，任务继续跑；写这句话时若有结构化反问挂起，该行会带上 `pending_request=<id>`，提示主会话先去回答而不是发消息。Codex 任务之间不直接对话，全部由主会话中转。
 
 选哪条 Codex 命令、review 的兜底、给 Codex 的说明都在 `skills/codex-director/scripts/codex-worker.sh` 里（`dispatch` 等于 `launch` 加 `collect`），脚本本身可以用 `bash -n` 和桩 companion 测试。
 
