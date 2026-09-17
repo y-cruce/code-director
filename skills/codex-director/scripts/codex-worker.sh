@@ -4,7 +4,7 @@
 #                                          STATUS: started / JOB / NAME / THREAD (launch + collect in one call)
 #   codex-worker.sh follow <job-id> --cwd <repo> [--after <cursor>] [--max-seconds <n>] [--until done]
 #                                          block and print the job's event stream until something the director must act on
-#                                          (DONE/FAILED/QUESTION/NOTIFIED/STALLED/TIMEOUT); run by the codex-task subagent
+#                                          (DONE/FAILED/QUESTION/QUESTION_PENDING/NOTIFIED/STALLED/TIMEOUT); run by the codex-task subagent
 #   codex-worker.sh events --cwd <repo>    stream job events (one line each) for a Monitor; needs a plugin with `events`
 #   codex-worker.sh message <job-id> <prompt-file> [--cwd <repo>] [--interrupt]
 #                                          forward a correction; print MESSAGED or MESSAGE_FAILED
@@ -87,6 +87,10 @@ do_launch() {
     echo 'NAME_REQUIRED: add a NAME: header with a few words that say what this task does (for example "worker answer subcommand")'; exit 1
   fi
   NAME=$(python3 -c 'import sys; print(sys.argv[1][:80])' "$NAME")
+  # Codex probes its own CLI inside CWD, so a path that does not exist is reported as a missing Codex install.
+  if [ ! -d "$CWD" ]; then
+    echo "CWD_NOT_FOUND: $CWD does not exist; fix the CWD: header (it must be an absolute path to an existing directory)"; exit 1
+  fi
   CC=$(select_companion)
   if [ -z "$CC" ]; then echo "CODEX_FAILED: no codex-companion.mjs found under ~/.claude/plugins/cache"; exit 1; fi
   printf '%s\n' "$CC" > "$WORK/companion"
