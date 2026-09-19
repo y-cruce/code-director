@@ -123,6 +123,20 @@ EFFORT: high
 | `review` | The plugin's standard review | No |
 | `adversarial-review` | Challenge-style review; the body is the focus text | No |
 
+### Executors
+
+`EXECUTOR` picks which agent runs a task-class mode (`investigate`, `implement`, `continue`). It defaults to `codex`, so nothing changes unless you set it.
+
+| EXECUTOR | Agent | Extra headers |
+|---|---|---|
+| `codex` (default) | Codex through the plugin's app-server | — |
+| `qoder` | qodercli over ACP; the binary is found on PATH, then `~/.qoder/entry/qoder`, or `CODEX_DIRECTOR_QODER_COMMAND` | `EXECUTOR_MODE` (a Qoder session mode, e.g. `yolo`) |
+| `acp` | Any other agent speaking the Agent Client Protocol on stdio | `EXECUTOR_COMMAND` (required), `EXECUTOR_ARGS` (a JSON array), `EXECUTOR_MODE` |
+
+`MODEL` names the executor's own model. On Qoder, `dfmodel` is the default — cheap and fast, the one to run many tasks on at once — and `ultimate` is the strong model for a hard problem. Qoder runs in its `yolo` permission mode unless `EXECUTOR_MODE` says otherwise, so a dispatched task never stalls on a prompt no human is watching.
+
+`review` and `adversarial-review` stay Codex-only; the worker refuses them with another executor. A non-Codex agent has no `request_user_input` or `notify_director`, so the director note leaves both out for it.
+
 Required header: `NAME` is a few words describing the task, truncated to 80 characters. It appears after `JOB:` in dispatch/collect output and, with a plugin supporting `task --label`, beside the job ID in status and events; older plugins print a note and launch without the label. Review commands carry the label as well.
 
 Optional headers: `EFFORT` (`medium` / `high` / `xhigh`, default high), `MODEL` (defaults to the model in your Codex config), `BASE` (base ref for review modes), `THREAD` (the Codex thread a `continue` must resume), `SIBLINGS` (one line naming other running Codex tasks, shown to Codex), `CWD` (repository to run in).

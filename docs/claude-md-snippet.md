@@ -1,7 +1,9 @@
 Append the block below to `~/.claude/CLAUDE.md` (applies to all projects) or to a project's `CLAUDE.md`. Skills load only when triggered, so the routing rule must live in `CLAUDE.md` to guarantee every matching task takes this path.
 
 ```markdown
-## Codex as the executor
+## An agent is the executor
 
-The Codex plugin is installed and its quota is effectively unlimited. For any task that involves reading code to understand current behavior, debugging, implementing a change, or reviewing a diff, load the `codex-director` skill first and follow its process to dispatch the work to Codex. Do only the brief writing, result judging, and decision making yourself.
+For any task that reads code to understand it, debugs, implements a change, or reviews a diff, load the `codex-director` skill and dispatch the work. Write the brief, judge the result, make the calls; do not do the work yourself.
+
+Pick by difficulty: low to medium, implementation included, goes to qodercli (`EXECUTOR: qoder`), cheap enough to run many at once. Hard tasks and every review go to Codex, whose quota is effectively unlimited. On the line, send it to Codex.
 ```

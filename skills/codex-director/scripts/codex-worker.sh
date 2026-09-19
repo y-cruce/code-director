@@ -16,7 +16,10 @@
 # Input file format: `KEY: value` header lines, a blank line, then the brief body.
 # Headers: NAME (required task name), MODE (investigate|implement|review|adversarial-review|continue), EFFORT, MODEL, BASE, WRITE, THREAD,
 # SIBLINGS, CWD, SANDBOX (full = no sandbox, the default for every task; network = workspace-write plus network
-# access; default = the plugin's own read-only / workspace-write choice).
+# access; default = the plugin's own read-only / workspace-write choice),
+# EXECUTOR (codex | qoder | acp) with EXECUTOR_COMMAND, EXECUTOR_ARGS (JSON array) and EXECUTOR_MODE for a
+# non-Codex agent; task-class modes only. Without the header the default is $CODEX_DIRECTOR_EXECUTOR, else codex,
+# and qoder runs in its `yolo` permission mode unless EXECUTOR_MODE or $CODEX_DIRECTOR_EXECUTOR_MODE says otherwise.
 set -uo pipefail
 
 select_companion() {
@@ -33,13 +36,13 @@ select_companion() {
 # Reads $1 (the input file). Sets the header variables and writes the body to $WORK/brief.md.
 parse_input() {
   local line key val in_header=1
-  NAME=""; MODE=""; EFFORT=""; MODEL=""; BASE=""; WRITE=""; THREAD=""; SIBLINGS=""; CWD=""; SANDBOX=""
+  NAME=""; MODE=""; EFFORT=""; MODEL=""; BASE=""; WRITE=""; THREAD=""; SIBLINGS=""; CWD=""; SANDBOX=""; EXECUTOR=""; EXECUTOR_MODE=""; EXECUTOR_COMMAND=""; EXECUTOR_ARGS=""
   : > "$WORK/brief.md"
   while IFS= read -r line || [ -n "$line" ]; do
     if [ "$in_header" = 1 ]; then
       if [ -z "$line" ]; then in_header=0; continue; fi
       case "$line" in
-        NAME:*|MODE:*|EFFORT:*|MODEL:*|BASE:*|WRITE:*|THREAD:*|SIBLINGS:*|CWD:*|SANDBOX:*)
+        NAME:*|MODE:*|EFFORT:*|MODEL:*|BASE:*|WRITE:*|THREAD:*|SIBLINGS:*|CWD:*|SANDBOX:*|EXECUTOR:*|EXECUTOR_MODE:*|EXECUTOR_COMMAND:*|EXECUTOR_ARGS:*)
           key=${line%%:*}; val=${line#*:}; val=${val#"${val%%[![:space:]]*}"}
           printf -v "$key" '%s' "$val" ;;
         *) in_header=0; printf '%s\n' "$line" >> "$WORK/brief.md" ;;
@@ -57,15 +60,25 @@ director_note() {
   cat <<'EOF'
 ## Who you are working with
 You were started by an automated director agent (Claude Code), not by a human. The director wrote the brief below and reads your final message; no human is watching this thread.
+EOF
+  # request_user_input and notify_director are Codex tools; another executor has
+  # neither, and naming them would send it looking for tools it does not have.
+  if [ -z "$EXECUTOR" ] || [ "$EXECUTOR" = codex ]; then
+    cat <<'EOF'
 - When you need a decision, missing information, or authorization, call request_user_input. The director answers it.
 EOF
-  if grep -rq 'notify_director' "$(dirname "$CC")"; then
+  else
+    cat <<'EOF'
+- When you need a decision, missing information, or authorization, ask for it however this agent asks the user. The director answers it.
+EOF
+  fi
+  if { [ -z "$EXECUTOR" ] || [ "$EXECUTOR" = codex ]; } && grep -rq 'notify_director' "$(dirname "$CC")"; then
     cat <<'EOF'
 - notify_director(message) sends a one-line note to the director without stopping your work. Use it only when you reach a conclusion that changes the plan (root cause found, scope larger than briefed, a blocker you are working around) or finish a phase the director could act on while you continue. Do not report routine progress. The director does not reply through this tool.
 EOF
   fi
   cat <<EOF
-- Other Codex tasks started by the same director may be running in this workspace. Do not coordinate with them yourself; tell the director what they need to know, in your final message or through notify_director.
+- Other tasks started by the same director may be running in this workspace. Do not coordinate with them yourself; tell the director what they need to know in your final message.
 - Other tasks currently running: ${SIBLINGS:-none known}
 
 ---- Brief ----
@@ -142,7 +155,50 @@ do_launch() {
     *)
       echo "CODEX_FAILED: unknown MODE '${MODE}'"; exit 1 ;;
   esac
-  [ -n "$MODEL" ] && CMD+=(--model "$MODEL")
+  EXECUTOR="${EXECUTOR:-${CODEX_DIRECTOR_EXECUTOR:-codex}}"
+  # --model is Codex's; for another executor MODEL names that agent's own model
+  # and is passed as --executor-model below.
+  [ -n "$MODEL" ] && [ "$EXECUTOR" = codex ] && CMD+=(--model "$MODEL")
+
+  # EXECUTOR picks which agent runs the task. `codex` (the default) keeps every
+  # existing flag; `qoder` runs qodercli over ACP, and `acp` is any other ACP
+  # agent, which then needs EXECUTOR_COMMAND.
+  if [ "$EXECUTOR" != codex ]; then
+    if [ "${CMD[2]:-}" != task ]; then
+      echo "CODEX_FAILED: EXECUTOR: $EXECUTOR only runs task-class modes (investigate, implement, continue); MODE: $MODE is Codex-only"; exit 1
+    fi
+    if ! grep -q 'executor-command' "$CC"; then
+      echo "CODEX_FAILED: the installed plugin has no --executor support; install a newer plugin, or point CODEX_COMPANION at a checkout that has it"; exit 1
+    fi
+    case "$EXECUTOR" in
+      qoder)
+        EXECUTOR_COMMAND="${EXECUTOR_COMMAND:-${CODEX_DIRECTOR_QODER_COMMAND:-}}"
+        if [ -z "$EXECUTOR_COMMAND" ]; then
+          EXECUTOR_COMMAND=$(command -v qoder || true)
+          [ -z "$EXECUTOR_COMMAND" ] && [ -x "$HOME/.qoder/entry/qoder" ] && EXECUTOR_COMMAND="$HOME/.qoder/entry/qoder"
+        fi
+        if [ -z "$EXECUTOR_COMMAND" ]; then
+          echo "CODEX_FAILED: qoder not found; put it on PATH or set CODEX_DIRECTOR_QODER_COMMAND"; exit 1
+        fi
+        CMD+=(--executor acp --executor-command "$EXECUTOR_COMMAND" --executor-args '["--acp"]')
+        # Same standing policy as Codex's danger-full-access: a dispatched task
+        # must not stall on a permission prompt no human is watching.
+        EXECUTOR_MODE="${EXECUTOR_MODE:-${CODEX_DIRECTOR_EXECUTOR_MODE:-yolo}}" ;;
+      acp)
+        EXECUTOR_COMMAND="${EXECUTOR_COMMAND:-${CODEX_COMPANION_ACP_COMMAND:-}}"
+        if [ -z "$EXECUTOR_COMMAND" ]; then
+          echo "CODEX_FAILED: EXECUTOR: acp needs EXECUTOR_COMMAND or CODEX_COMPANION_ACP_COMMAND"; exit 1
+        fi
+        CMD+=(--executor acp --executor-command "$EXECUTOR_COMMAND")
+        [ -n "${EXECUTOR_ARGS:-}" ] && CMD+=(--executor-args "$EXECUTOR_ARGS")
+        # Mode ids are the agent's own, so an unknown agent gets no default.
+        EXECUTOR_MODE="${EXECUTOR_MODE:-${CODEX_DIRECTOR_EXECUTOR_MODE:-}}" ;;
+      *)
+        echo "CODEX_FAILED: EXECUTOR must be 'codex', 'qoder' or 'acp', got '$EXECUTOR'"; exit 1 ;;
+    esac
+    [ -n "$EXECUTOR_MODE" ] && CMD+=(--executor-mode "$EXECUTOR_MODE")
+    [ -n "$MODEL" ] && CMD+=(--executor-model "$MODEL")
+  fi
   if [ "${CMD[2]:-}" = task ]; then
     # Policy: Codex tasks run without a sandbox (full read/write and network) unless the header says otherwise.
     # Read-only intent is expressed in the brief, not enforced by the sandbox.

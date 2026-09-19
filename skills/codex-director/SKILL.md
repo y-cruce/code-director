@@ -69,6 +69,45 @@ EFFORT: high
 <brief>
 ```
 
+### Executors
+
+`EXECUTOR` picks the agent that runs a task-class mode (`investigate`, `implement`, `continue`). **Choose it by how hard the task is**, the same judgement the effort table below asks for:
+
+| Task | Executor |
+|---|---|
+| Low to medium difficulty: the work lives in one or two files, the change follows a plan that is already settled, or the question is answered by reading a known area. Implementation counts, not just reading. | `EXECUTOR: qoder` on its default `dfmodel` |
+| Hard: find a root cause, reason across many files, design the change as well as write it, or an edit whose blast radius you cannot bound | leave `EXECUTOR` out and Codex runs it |
+| Many independent tasks at once | `EXECUTOR: qoder`, which is cheap enough to run in bulk |
+| `review` and `adversarial-review` | Codex only; the worker refuses another executor |
+
+`dfmodel` is cheap and fast, so a medium task costs little there and several can run at once. Codex has no quota worth managing, so it takes everything that needs the stronger reasoning. When a task sits on the line, send it to Codex: a wrong answer costs more than the credits saved. `MODEL: ultimate` puts a hard task on Qoder's strong model, which is worth it only when you have a reason to keep that thread on Qoder.
+
+The user's own instruction wins over this table, and `CODEX_DIRECTOR_EXECUTOR` sets the default when the header is absent.
+
+| EXECUTOR | Agent | Extra headers |
+|---|---|---|
+| `codex` (default) | Codex through the plugin's app-server | — |
+| `qoder` | qodercli over ACP; the binary is found on PATH, then `~/.qoder/entry/qoder`, or `CODEX_DIRECTOR_QODER_COMMAND` | `EXECUTOR_MODE` (a Qoder session mode, e.g. `yolo`) |
+| `acp` | Any other agent speaking the Agent Client Protocol on stdio | `EXECUTOR_COMMAND` (required), `EXECUTOR_ARGS` (a JSON array), `EXECUTOR_MODE` |
+
+`MODEL:` names the executor's own model. On Qoder two are worth knowing:
+
+| MODEL | When |
+|---|---|
+| `dfmodel` | Qoder's default. Cheap and fast, so it is the one to run many tasks on at once. |
+| `ultimate` | The strong model. Use it for a hard or subtle problem, not for bulk work. |
+
+Leave `MODEL` out and Qoder runs `dfmodel`. Qoder runs in its `yolo` permission mode by default, matching the standing policy that a dispatched task never stalls on a prompt no human is watching; `EXECUTOR_MODE:` overrides it.
+
+What you lose when the executor is not Codex:
+
+- `review` and `adversarial-review` are refused: they use Codex's own review, which has no ACP equivalent.
+- `EFFORT` is Codex's; another agent ignores it.
+- The agent has neither `request_user_input` nor `notify_director`, so it cannot send you a mid-run note. It still asks questions through ACP elicitation, which reaches you as the usual `QUESTION` event.
+- `THREAD:` works the same way, but a thread belongs to the executor that created it: a Qoder session id cannot be resumed as a Codex thread.
+- No streaming command output, no file diff counts, no sub-agent rows: ACP does not carry them, so the live view shows fewer details than a Codex task.
+- The result footer prints `Session ID:` with no `codex resume` line.
+
 ### MODE and effort
 
 Codex runs on `gpt-6-astra` by default (set in `~/.codex/config.toml`, together with a default effort of `high`). On this model, **medium or high is enough for nearly every task**; do not set `MODEL` unless the user asks for a specific model.

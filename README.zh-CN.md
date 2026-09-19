@@ -123,6 +123,20 @@ EFFORT: high
 | `review` | 官方 review | 不会 |
 | `adversarial-review` | 挑刺式 review，正文写关注点 | 不会 |
 
+### 执行器
+
+`EXECUTOR` 决定谁来跑 task 类模式（`investigate`、`implement`、`continue`），默认 `codex`，不写就和以前一样。
+
+| EXECUTOR | 执行者 | 额外头部 |
+|---|---|---|
+| `codex`（默认） | 走插件 app-server 的 Codex | — |
+| `qoder` | 走 ACP 的 qodercli；二进制按 PATH、`~/.qoder/entry/qoder`、`CODEX_DIRECTOR_QODER_COMMAND` 的顺序找 | `EXECUTOR_MODE`（Qoder 的会话模式，例如 `yolo`） |
+| `acp` | 任何在 stdio 上说 Agent Client Protocol 的 agent | `EXECUTOR_COMMAND`（必填）、`EXECUTOR_ARGS`（JSON 数组）、`EXECUTOR_MODE` |
+
+`MODEL` 指的是执行器自己的模型。Qoder 上 `dfmodel` 是默认值，便宜快，适合大量并行；`ultimate` 是强模型，留给难题。Qoder 默认跑在 `yolo` 权限模式，除非 `EXECUTOR_MODE` 另行指定——派出去的任务背后没人盯着，不能卡在权限确认上。
+
+`review` 和 `adversarial-review` 仍是 Codex 独有，配别的执行器会被拒绝。非 Codex 的 agent 没有 `request_user_input` 和 `notify_director`，任务书说明里不会提这两个工具。
+
 必填头部：`NAME` 用几个词说明任务内容，超过 80 个字符会截断。名称显示在 dispatch/collect 输出的 `JOB:` 后；插件支持 `task --label` 时，也会显示在 status 和事件的任务 ID 旁，旧插件会输出提示并照常启动。review 命令同样传名称。
 
 可选头部：`EFFORT`（`medium` / `high` / `xhigh`，缺省 high）、`MODEL`（缺省用你 Codex 配置里的模型）、`BASE`（review 类的基准分支）、`THREAD`（`continue` 必须续上的 Codex 线程）、`SIBLINGS`（一行写明其他正在跑的 Codex 任务，会给 Codex 看）、`CWD`（在哪个仓库里跑）。
