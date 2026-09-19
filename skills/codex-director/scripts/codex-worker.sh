@@ -19,7 +19,7 @@
 # Headers: NAME (required task name), MODE (investigate|implement|review|adversarial-review|continue), EFFORT, MODEL, BASE, WRITE, THREAD,
 # SIBLINGS, CWD, SANDBOX (full = no sandbox, the default for every task; network = workspace-write plus network
 # access; default = the plugin's own read-only / workspace-write choice),
-# EXECUTOR (codex | qoder | acp) with EXECUTOR_COMMAND, EXECUTOR_ARGS (JSON array), EXECUTOR_MODE and MODEL for a
+# EXECUTOR (codex | qoder | acp) with EXECUTOR_COMMAND, EXECUTOR_ARGS (JSON array), EXECUTOR_MODE, EXECUTOR_EFFORT and MODEL for a
 # non-Codex agent; task-class modes only. Without the header the default is $CODEX_DIRECTOR_EXECUTOR, else codex,
 # and qoder runs in its `yolo` permission mode unless EXECUTOR_MODE or $CODEX_DIRECTOR_EXECUTOR_MODE says otherwise.
 set -uo pipefail
@@ -42,13 +42,13 @@ select_companion() {
 # Reads $1 (the input file). Sets the header variables and writes the body to $WORK/brief.md.
 parse_input() {
   local line key val in_header=1
-  NAME=""; MODE=""; EFFORT=""; MODEL=""; BASE=""; WRITE=""; THREAD=""; SIBLINGS=""; CWD=""; SANDBOX=""; EXECUTOR=""; EXECUTOR_MODE=""; EXECUTOR_COMMAND=""; EXECUTOR_ARGS=""
+  NAME=""; MODE=""; EFFORT=""; MODEL=""; BASE=""; WRITE=""; THREAD=""; SIBLINGS=""; CWD=""; SANDBOX=""; EXECUTOR=""; EXECUTOR_MODE=""; EXECUTOR_EFFORT=""; EXECUTOR_COMMAND=""; EXECUTOR_ARGS=""
   : > "$WORK/brief.md"
   while IFS= read -r line || [ -n "$line" ]; do
     if [ "$in_header" = 1 ]; then
       if [ -z "$line" ]; then in_header=0; continue; fi
       case "$line" in
-        NAME:*|MODE:*|EFFORT:*|MODEL:*|BASE:*|WRITE:*|THREAD:*|SIBLINGS:*|CWD:*|SANDBOX:*|EXECUTOR:*|EXECUTOR_MODE:*|EXECUTOR_COMMAND:*|EXECUTOR_ARGS:*)
+        NAME:*|MODE:*|EFFORT:*|MODEL:*|BASE:*|WRITE:*|THREAD:*|SIBLINGS:*|CWD:*|SANDBOX:*|EXECUTOR:*|EXECUTOR_MODE:*|EXECUTOR_EFFORT:*|EXECUTOR_COMMAND:*|EXECUTOR_ARGS:*)
           key=${line%%:*}; val=${line#*:}; val=${val#"${val%%[![:space:]]*}"}
           printf -v "$key" '%s' "$val" ;;
         *) in_header=0; printf '%s\n' "$line" >> "$WORK/brief.md" ;;
@@ -208,11 +208,13 @@ do_launch() {
     esac
     [ -n "$EXECUTOR_MODE" ] && CMD+=(--executor-mode "$EXECUTOR_MODE")
     [ -n "$MODEL" ] && CMD+=(--executor-model "$MODEL")
-    # Which effort rungs exist depends on the model the agent ends up on, and
-    # only the agent knows them: qoder's ultimate has xhigh, its dfmodel stops
-    # at max. So the intent goes out as written and the driver settles it
-    # against the options the agent actually reports.
-    EXECUTOR_EFFORT="${EFFORT:-${CODEX_DIRECTOR_EXECUTOR_EFFORT:-xhigh}}"
+    # EFFORT is the reasoning budget of a Codex dispatch and means nothing to
+    # another agent, so it is not what sets the rung here: EXECUTOR_EFFORT is,
+    # and it asks for the most the model has. Which rungs exist depends on the
+    # model the agent ends up on, and only the agent knows them: qoder's
+    # ultimate has xhigh, its dfmodel stops at max. So the intent goes out as
+    # written and the driver settles it against the options it actually reports.
+    EXECUTOR_EFFORT="${EXECUTOR_EFFORT:-${CODEX_DIRECTOR_EXECUTOR_EFFORT:-xhigh}}"
     CMD+=(--executor-effort "$EXECUTOR_EFFORT")
     # --effort above is Codex's; rebuild without it so the agent is not handed
     # both (unset would leave holes that set -u then trips over).

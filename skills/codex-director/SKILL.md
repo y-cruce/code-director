@@ -102,7 +102,7 @@ Leave `MODEL` out and Qoder runs `dfmodel`. Qoder runs in its `yolo` permission 
 What you lose when the executor is not Codex:
 
 - `review` and `adversarial-review` are refused: they use Codex's own review, which has no ACP equivalent.
-- `EFFORT` is Codex's; another agent ignores it.
+- `EFFORT` is Codex's reasoning budget and does not reach the agent. Its own rung comes from `EXECUTOR_EFFORT:` (or `$CODEX_DIRECTOR_EXECUTOR_EFFORT`), which defaults to `xhigh`: the driver asks for the most the chosen model has and settles for `max` or `high` when it has no `xhigh`. Leave it out unless you want the agent to think less.
 - The agent has neither `request_user_input` nor `notify_director`, so it cannot send you a mid-run note. It still asks questions through ACP elicitation, which reaches you as the usual `QUESTION` event.
 - `THREAD:` works the same way, but a thread belongs to the executor that created it: a Qoder session id cannot be resumed as a Codex thread.
 - No streaming command output, no file diff counts, no sub-agent rows: ACP does not carry them, so the live view shows fewer details than a Codex task.
