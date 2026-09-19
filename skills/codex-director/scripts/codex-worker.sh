@@ -8,6 +8,8 @@
 #   codex-worker.sh events --cwd <repo>    stream job events (one line each) for a Monitor; needs a plugin with `events`
 #   codex-worker.sh message <job-id> <prompt-file> [--cwd <repo>] [--interrupt]
 #                                          forward a correction; print MESSAGED or MESSAGE_FAILED
+#   codex-worker.sh answer <job-id> <request-id> <answers-file> [--cwd <repo>]
+#                                          deliver answers to a structured question
 #   codex-worker.sh companion              print the selected codex-companion.mjs path
 # Building blocks of dispatch, also usable on their own:
 #   codex-worker.sh launch <input-file>    parse the header lines, start Codex, print WORK=... JOB=... STARTED
@@ -30,6 +32,10 @@ select_companion() {
   for f in $(ls ~/.claude/plugins/cache/*/codex/*/scripts/codex-companion.mjs 2>/dev/null | sort -V); do grep -q 'case "message":' "$f" && cc="$f"; done
   for f in $(ls ~/.claude/plugins/cache/*/codex/*/scripts/codex-companion.mjs 2>/dev/null | sort -V); do grep -q 'case "events":' "$f" && cc="$f"; done
   for f in $(ls ~/.claude/plugins/cache/*/codex/*/scripts/codex-companion.mjs 2>/dev/null | sort -V); do grep -q 'case "observe":' "$f" && cc="$f"; done
+  if [ -z "$cc" ]; then
+    echo "COMPANION_NOT_FOUND: no codex-companion.mjs under ~/.claude/plugins/cache; install the Codex plugin or set CODEX_COMPANION" >&2
+    return 1
+  fi
   printf '%s\n' "$cc"
 }
 
@@ -412,12 +418,12 @@ NODE
 
 case "${1:-}" in
   dispatch)  do_dispatch "${2:-}" ;;
-  launch)    do_launch "$2" ;;
-  collect)   do_collect "$2" ;;
+  launch)    [ "$#" -ge 2 ] || { echo "usage: codex-worker.sh launch <input-file>"; exit 1; }; do_launch "$2" ;;
+  collect)   [ "$#" -ge 2 ] || { echo "usage: codex-worker.sh collect <WORK>"; exit 1; }; do_collect "$2" ;;
   companion) select_companion ;;
   events)    shift; do_events "$@" ;;
   follow)    shift; do_follow "$@" ;;
   message)   shift; do_message "$@" ;;
   answer)    shift; do_answer "$@" ;;
-  *) echo "usage: codex-worker.sh dispatch [input-file] | launch <input-file> | collect <WORK> | companion | events --cwd <repo> | message <job-id> <prompt-file> [--cwd <repo>] [--interrupt] | answer <job-id> <request-id> <answers-file> [--cwd <repo>]"; exit 1 ;;
+  *) echo "usage: codex-worker.sh dispatch [input-file] | launch <input-file> | collect <WORK> | companion | events --cwd <repo> | follow <job-id> --cwd <repo> [--after <cursor>] | message <job-id> <prompt-file> [--cwd <repo>] [--interrupt] | answer <job-id> <request-id> <answers-file> [--cwd <repo>]"; exit 1 ;;
 esac
