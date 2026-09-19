@@ -170,9 +170,13 @@ do_launch() {
   # existing flag; `qoder` runs qodercli over ACP, and `acp` is any other ACP
   # agent, which then needs EXECUTOR_COMMAND.
   if [ "$EXECUTOR" != codex ]; then
-    if [ "${CMD[2]:-}" != task ]; then
-      echo "CODEX_FAILED: EXECUTOR: $EXECUTOR only runs task-class modes (investigate, implement, continue); MODE: $MODE is Codex-only"; exit 1
-    fi
+    # Gate on the mode that was asked for, not on the command that was built:
+    # a review with more than three untracked files is rebuilt as a task, which
+    # would otherwise let a review through to an agent that must not run one.
+    case "$MODE" in
+      investigate|implement|continue) ;;
+      *) echo "CODEX_FAILED: EXECUTOR: $EXECUTOR only runs task-class modes (investigate, implement, continue); MODE: $MODE is Codex-only"; exit 1 ;;
+    esac
     if ! grep -q 'executor-command' "$CC"; then
       echo "CODEX_FAILED: the installed plugin has no --executor support; install a newer plugin, or point CODEX_COMPANION at a checkout that has it"; exit 1
     fi
