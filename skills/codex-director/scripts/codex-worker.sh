@@ -115,6 +115,11 @@ do_launch() {
   printf '%s\n' "$CWD" > "$WORK/cwd"
   printf '%s\n' "$NAME" > "$WORK/name"
 
+  # Settled before the note is written: director_note tells the agent which
+  # tools it has, and a default coming from the environment would otherwise
+  # reach an ACP agent describing Codex's.
+  EXECUTOR="${EXECUTOR:-${CODEX_DIRECTOR_EXECUTOR:-codex}}"
+
   local CMD=() FOCUS CAND
   case "$MODE" in
     investigate)
@@ -160,7 +165,6 @@ do_launch() {
     *)
       echo "CODEX_FAILED: unknown MODE '${MODE}'"; exit 1 ;;
   esac
-  EXECUTOR="${EXECUTOR:-${CODEX_DIRECTOR_EXECUTOR:-codex}}"
   # --model is Codex's; for another executor MODEL names that agent's own model
   # and is passed as --executor-model below.
   [ -n "$MODEL" ] && [ "$EXECUTOR" = codex ] && CMD+=(--model "$MODEL")
@@ -168,6 +172,12 @@ do_launch() {
   # EXECUTOR picks which agent runs the task. `codex` (the default) keeps every
   # existing flag; `qoder` runs qodercli over ACP, and `acp` is any other ACP
   # agent, which then needs EXECUTOR_COMMAND.
+  if [ "$EXECUTOR" = codex ] && [ "${CMD[2]:-}" = task ] && grep -q 'executor-command' "$CC"; then
+    # Named rather than left to the companion's default, which reads
+    # $CODEX_COMPANION_EXECUTOR: an inherited value would otherwise quietly
+    # overrule a brief that asked for Codex.
+    CMD+=(--executor codex)
+  fi
   if [ "$EXECUTOR" != codex ]; then
     # Gate on the mode that was asked for, not on the command that was built:
     # a review with more than three untracked files is rebuilt as a task, which
