@@ -4,7 +4,7 @@
 #                                          STATUS: started / JOB / NAME / THREAD (launch + collect in one call)
 #   codex-worker.sh follow <job-id> --cwd <repo> [--after <cursor>] [--max-seconds <n>] [--until done]
 #                                          block and print the job's event stream until something the director must act on
-#                                          (DONE/FAILED/QUESTION/QUESTION_PENDING/NOTIFIED/STALLED/TIMEOUT); run by the codex-task subagent
+#                                          (DONE/FAILED/QUESTION/QUESTION_PENDING/NOTIFIED/STALLED/TIMEOUT)
 #   codex-worker.sh events --cwd <repo>    stream job events (one line each) for a Monitor; needs a plugin with `events`
 #   codex-worker.sh message <job-id> <prompt-file> [--cwd <repo>] [--interrupt]
 #                                          forward a correction; print MESSAGED or MESSAGE_FAILED

@@ -14,7 +14,7 @@ Premise: Codex quota is effectively unlimited. The scarce resource is the Claude
 
 ## Dispatching
 
-All dispatch logic lives in `~/.claude/skills/codex-director/scripts/codex-worker.sh` (which Codex command to run, the director note, sandbox flags, review fallbacks). A task-class dispatch (`investigate`, `implement`, `continue`) goes through the `codex-task` subagent so the task is visible like any Claude Code subagent: an Agent row in the transcript, an entry in the tasks list, its own page with the live Codex trace (drawn by the Codex plugin's mod inside the running `follow` command), and a completion notification. One dispatch is two calls. First write the dispatch text to a file with the Write tool (in your scratchpad directory, one file per task, for example `<scratchpad>/codex/locate-answer-validation.md`; the script copies it into its own work directory, so several files in one folder can be dispatched at the same time):
+All dispatch logic lives in `~/.claude/skills/codex-director/scripts/codex-worker.sh` (which Codex command to run, the director note, sandbox flags, review fallbacks). One dispatch is two calls. First write the dispatch text to a file with the Write tool (in your scratchpad directory, one file per task, for example `<scratchpad>/codex/locate-answer-validation.md`; the script copies it into its own work directory, so several files in one folder can be dispatched at the same time):
 
 ```
 MODE: investigate
@@ -25,37 +25,34 @@ CWD: /abs/path/to/repo
 <brief>
 ```
 
-Then one `Agent` call in the background, `subagent_type` `codex-task`, `description` the task's `NAME`, whose prompt is exactly three lines:
+Then one foreground Bash call that starts it and returns in seconds:
 
 ```
-DISPATCH_FILE: <that file's absolute path>
-CWD: /abs/path/to/repo
-NAME: locate answer validation path
+bash ~/.claude/skills/codex-director/scripts/codex-worker.sh dispatch < <that file's absolute path>
 ```
 
-The agent labels every shell call with that name, so the tasks list shows `Codex · <NAME> · following` instead of a generic activity.
-The brief never passes through the agent's prompt or a shell command, so the task's page shows it nowhere but in your own Write row. The subagent runs `codex-worker.sh dispatch` on that file, then `codex-worker.sh follow <job-id>`, and stays on the job until an event you must act on. Its report (delivered as the agent's completion notification) is machine output: `JOB: <id>`, then one terminal line: `DONE job=<id> [<name>] thread=<id>`, `FAILED job=<id> [<name>] thread=<id> <reason>`, `QUESTION job=<id> [<name>] request=<id> <first question>`, `QUESTION_PENDING job=<id> [<name>] request=<id> still unanswered: <first question>`, `NOTIFIED job=<id> thread=<id> [pending_request=<n>] <note>` or `STALLED job=<id> [<name>] thread=<id> <n>m without progress`. A dispatch that fails at launch comes back as the raw `STATUS: failed` / `ERROR:` output instead; fix the dispatch and spawn again. Put parallel dispatches in one message as separate Agent calls. Do not poll. Keep the agent's id together with the job id, its repository and its thread: you continue the same agent later.
+It prints `STATUS: started`, `JOB:`, `NAME:`, `THREAD:` and sometimes a `NOTE:` line, or `STATUS: failed` / `ERROR:` when the dispatch itself is wrong — fix it and dispatch again. Several dispatches go in one message as separate Bash calls. Keep each job id together with its repository and its thread.
 
-The building block is still there for scripts and headless runs: `bash ~/.claude/skills/codex-director/scripts/codex-worker.sh dispatch <<'INPUT' ... INPUT` returns within seconds with `STATUS: started`, `JOB:`, `NAME:`, `THREAD:` and sometimes a `NOTE:` line, and `codex-worker.sh follow <job-id> --cwd <repo> [--after <cursor>]` blocks and prints the same event stream the subagent reads.
+The brief never passes through a shell command, so it appears nowhere but in your own Write row.
+
+Nothing waits on the job. The Codex plugin's tasks pane watches every job this session started, draws its live trace, and wakes you between turns when one of them produces an event you must act on. `/codex:tasks` opens the pane, `/codex:tasks <n>` or `/codex:tasks <part of a name>` switches to one.
 
 A Codex task may run for any length of time. Do not re-dispatch because it is taking long. `/codex:status` lists jobs and `/codex:status <job-id>` shows pending messages, questions, notifications, and interruption state.
 
-### Waiting: the subagent reports, you act, you send it back
+### Waiting: the pane wakes you, you act
 
-The `codex-task` agent ends its turn whenever the job produced something you must act on, and its report reaches you as that agent's completion notification. Each report is one event and arrives on its own schedule; it is not user input. The bracketed name in the terminal line is the `NAME:` you gave at dispatch; use it, not the job id, when you tell the user which task an event belongs to.
+Nothing blocks on a job. The tasks pane watches every job this session started and, when one produces an event you must act on, submits a prompt naming it — that prompt starts a turn the way the user's own would, and it is the plugin speaking, not the user. It reads `Codex tasks` and then a line per event, `<name> · <event type>: <text>`, where the name is the `NAME:` you gave at dispatch; use it, not the job id, when telling the user which task something belongs to. Five kinds arrive:
 
-- `DONE`: run `node "$(bash ~/.claude/skills/codex-director/scripts/codex-worker.sh companion)" result <job-id> --cwd <repo>` in a foreground Bash call and judge the output as usual (the agent follows with `--quiet`, so the result never passes through its context). The agent stays available for a `continue` on the same problem (below).
-- `QUESTION`: run `status <job-id> --cwd <repo> --json` on the same companion to read the questions, answer them (below), then SendMessage the agent `answered, continue`. It follows the job again from its cursor; the same page continues.
-- `QUESTION_PENDING`: that request was already reported once, and it is still unanswered. Run `status <job-id> --cwd <repo> --json` and look at `job.live.questions`: answer it if it is really pending (the earlier answer was not accepted), and if the list is empty just SendMessage `continue`. Never answer twice blindly.
-- `NOTIFIED`: react (below), then SendMessage the agent `continue`. The job never paused. A `pending_request=<n>` field means a structured question was open when the note was written: answer that request first with `answer`, then `continue`; sending a `message` while it is pending is refused.
-- `STALLED`: run `status <job-id>` at once and look at the owner process and the time of the last progress entry; a job whose owner has exited is dead even if the store still says running, so report it and re-dispatch instead of waiting. If it is alive, SendMessage the agent `continue`. Never let a silent job sit unchecked for an hour.
-- `FAILED`: report the reason to the user; the agent is done with that job.
-- `MESSAGE_REFUSED`: answer the pending structured question with `answer` and its question id first, then resend the message stating that it has been answered.
-- `MESSAGE_FAILED` / `MESSAGE_UNSUPPORTED:`: forwarding failed; fix the reported error or update the plugin, then resend `MESSAGE_FILE:`. The agent has stopped following; do not assume delivery.
+- `job.completed`: run `node "$(bash ~/.claude/skills/codex-director/scripts/codex-worker.sh companion)" result <job-id> --cwd <repo>` in a foreground Bash call and judge the output as usual.
+- `job.failed` / `job.cancelled`: report the reason to the user.
+- `question.opened`: run `status <job-id> --cwd <repo> --json` on the same companion to read the questions and answer them (below). The job stays alive, waiting.
+- `director.notified`: a one-line note from Codex while it keeps working; react if it changes the plan. The job never paused.
 
-A job's history is kept whole, so a `continue` message after any of these replays nothing and skips nothing. The agent handles Bash's 10-minute limit itself (it re-follows on `TIMEOUT` without telling you), and it never answers Codex on your behalf.
+The pane delivers between turns, so an event raised while you are mid-turn arrives at the end of it. It does not report a job that was already over the first time it saw it, and it says each ending once. What it cannot tell you is that a job has gone quiet: no event means no push, so a job with no progress for fifteen minutes needs `status <job-id>` from you — check any job you have not heard from in that long rather than waiting.
 
-Alternative when the Agent tool is not available (SDK, headless) or for review modes, which start detached without a job id: arm one Monitor per repository with the command `bash ~/.claude/skills/codex-director/scripts/codex-worker.sh events --cwd <repo>` (description: "Codex job events in <repo>"; a worktree counts as its own repository) before the first dispatch there, dispatch with the `dispatch` subcommand, and read the same event lines from the monitor (`DONE`, `FAILED`, `QUESTION`, `NOTIFIED`, `STALLED`, plus `QUESTION_PENDING` in two forms: `request=<id> still unanswered: <first question>` when a request that was already reported comes up again, and `request=<id> <n>m unanswered, expires in <m>m: <first question>` every 2 minutes while a question stays unanswered). On `DONE` read the output with `result <job-id>`. Stop the monitor with TaskStop when every job it watched has reported; it also exits on its own after an hour without an active job, ending with `IDLE_EXIT`, after which the next dispatch needs a fresh monitor. The timings above are the defaults of `--poll-ms` (2s), `--stall-ms` (15m), `--question-remind-ms` (2m) and `--exit-idle-ms` (1h); the last two need a plugin newer than 1.0.10. A plugin from 1.2.8 on rejects any flag `events` or `follow` does not know, naming the supported ones and exiting non-zero; older ones ignore a misspelled flag without a word, so it silently means the default.
+To watch a job's trace as it runs, `/codex:tasks` opens the pane and `/codex:tasks <n>` or a fragment of its name switches to one. To block on a single job instead, `codex-worker.sh follow <job-id> --cwd <repo> [--after <cursor>]` prints the same events and returns on the first one that needs you; it is a tool for when you want to wait, not the normal path.
+
+Alternative when the plugin's pane is not running (SDK, headless) or for review modes, which start detached without a job id: arm one Monitor per repository with the command `bash ~/.claude/skills/codex-director/scripts/codex-worker.sh events --cwd <repo>` (description: "Codex job events in <repo>"; a worktree counts as its own repository) before the first dispatch there, dispatch with the `dispatch` subcommand, and read the same event lines from the monitor (`DONE`, `FAILED`, `QUESTION`, `NOTIFIED`, `STALLED`, plus `QUESTION_PENDING` in two forms: `request=<id> still unanswered: <first question>` when a request that was already reported comes up again, and `request=<id> <n>m unanswered, expires in <m>m: <first question>` every 2 minutes while a question stays unanswered). On `DONE` read the output with `result <job-id>`. Stop the monitor with TaskStop when every job it watched has reported; it also exits on its own after an hour without an active job, ending with `IDLE_EXIT`, after which the next dispatch needs a fresh monitor. The timings above are the defaults of `--poll-ms` (2s), `--stall-ms` (15m), `--question-remind-ms` (2m) and `--exit-idle-ms` (1h); the last two need a plugin newer than 1.0.10. A plugin from 1.2.8 on rejects any flag `events` or `follow` does not know, naming the supported ones and exiting non-zero; older ones ignore a misspelled flag without a word, so it silently means the default.
 
 Sandbox: every Codex task runs without a sandbox (full read/write access and network), which is the user's standing policy; codex-worker passes `--sandbox danger-full-access` unless the header says otherwise. Read-only intent for `investigate` is stated in the brief, not enforced by the sandbox, so keep writing "read-only, do not modify files" into investigation briefs. `SANDBOX: network` (workspace-write plus network) or `SANDBOX: default` (the plugin's own read-only / workspace-write choice) narrow it for a single task; use them only when the user asks. On plugins without the `--sandbox` option the task runs in the plugin's default sandbox and cannot open sockets; a Codex report that tests could not run there is not a test failure.
 
@@ -129,7 +126,7 @@ Picking the effort:
 
 ### Review modes and untracked files
 
-Review modes (`review`, `adversarial-review`) do not go through the `codex-task` agent: they start detached with an empty `JOB:`, so dispatch them with the `dispatch` subcommand and read their `DONE` or `FAILED` line from a Monitor (see the alternative above). Without `BASE`, the plugin uses working-tree mode and inlines the content of every untracked file into the prompt. Repos with many untracked files exceed Codex's input limit and the review fails. Two options:
+Review modes (`review`, `adversarial-review`) start detached with an empty `JOB:`, so the pane never sees them: dispatch them the same way and read their `DONE` or `FAILED` line from a Monitor (see the alternative above). Without `BASE`, the plugin uses working-tree mode and inlines the content of every untracked file into the prompt. Repos with many untracked files exceed Codex's input limit and the review fails. Two options:
 
 - **Preferred**: commit the change to a branch first and put `BASE: <base branch>` in the header so only the committed diff is compared.
 - If committing is not possible, do nothing special. codex-worker counts untracked files and, above 3, automatically falls back to a read-only task that performs the review, adding a NOTE line to its return. In that case **list the changed files in the brief body** so Codex knows what to look at.
@@ -145,25 +142,24 @@ How it works:
 - A thread belongs to the checkout it was created in. `continue` with `CWD:` pointing at a different worktree is rejected by the plugin (`Thread ... is not tracked for this repository`); to carry the work into a worktree, dispatch a fresh task there with a complete brief.
 - `continue` starts a later turn after the previous job finishes. While the job is still running, use the live controls below instead of dispatching another task.
 - A `continue` brief can be short: state what changed since last time and what to do next. Codex already has the background.
-- Send a `continue` to the problem's existing `codex-task` agent with SendMessage (write the `MODE: continue` dispatch text with `THREAD:` to a new file, then message the agent the same three `DISPATCH_FILE:` / `CWD:` / `NAME:` lines) when that agent is still around; its page then holds the whole history of the problem. Spawn a new agent only when it is gone.
+- A `continue` is dispatched like any other task: write the `MODE: continue` text with `THREAD:` to a new file and run `dispatch` on it.
 
 On an older plugin, parallel routes are therefore for independent problems or one-shot work, not for a problem you intend to keep iterating on.
 
 ### Live corrections and questions
 
-**Nothing sent to the agent reaches Codex until the agent's next tool round.** The host queues messages for a busy agent and never interrupts a running tool, and the agent sits inside `follow` for up to nine minutes, so a message you send it can wait that long. Your own Bash calls are not blocked by it. Route by urgency first:
+Everything reaches a running job through the worker, in a Bash call of your own:
 
 | Intent | Channel |
 |---|---|
-| Stop or redirect Codex now | Run `codex-worker.sh message <job-id> <prompt-file> --cwd <repo> --interrupt` yourself |
+| Stop or redirect Codex now | `codex-worker.sh message <job-id> <prompt-file> --cwd <repo> --interrupt` |
 | Correct an ACP agent (qoder) at all | The same, with `--interrupt`: an ACP executor reports `midTurnSteer: false`, so a plain `message` is always refused |
-| End the job now | `cancel <job-id>` on the selected companion, yourself |
-| Answer a structured question | `answer` with the request id and exact question ids, yourself |
-| A correction that can wait for the agent's next round | SendMessage the task's agent `MESSAGE_FILE: <absolute path>` |
-| Keep the agent following | SendMessage `continue` |
-| Start a new round | SendMessage the `DISPATCH_FILE:` / `CWD:` / `NAME:` triple |
+| A correction that can wait | The same without `--interrupt`; it lands at Codex's next model request |
+| End the job now | `cancel <job-id>` on the selected companion |
+| Answer a structured question | `answer` with the request id and exact question ids |
+| Start a new round on the same problem | Dispatch `MODE: continue` with `THREAD:` |
 
-For the unhurried path, write the correction to a file and SendMessage `MESSAGE_FILE: <absolute path>` (optionally `INTERRUPT: yes`). The agent supplies its saved job id and repository, forwards the file without reading it, and resumes following after delivery. Everything you send it that is not routing is forwarded as well, inline text included; keep inline text short and free of code, since the agent writes it through a shell heredoc. If its last report was `QUESTION` or `QUESTION_PENDING`, first answer it and say "Already answered through answer" in the same message, or the agent returns `MESSAGE_REFUSED`.
+A correction goes in a file, not inline: write it with the Write tool and pass the path. Answer a pending structured question before sending an ordinary message — while one is open the message is refused, and the refusal names the request.
 
 For direct Bash delivery, use `bash ~/.claude/skills/codex-director/scripts/codex-worker.sh message <job-id> <prompt-file> --cwd <repo> [--interrupt]`. It prints only `MESSAGED job=<id>` on success, or `MESSAGE_FAILED job=<id> <reason>` on failure; unsupported plugins return `MESSAGE_UNSUPPORTED:` and exit 2. Keep the job ID with its repository and thread. Success means accepted for the next model request, not that the instruction has already been followed. The slash command `/codex:message <job-id> <text>` remains user-facing shorthand. Use the worker for automatic `message` and `answer` calls; `status` and `result` still use the selected companion with `--cwd <repo>`. Do not invoke these commands as skills.
 
@@ -175,11 +171,11 @@ On `STATUS: waiting-for-answer`, the Codex job remains running. Read the returne
 2. Write the answers file as a JSON map keyed by those ids: `{"<question-id>":{"answers":["<answer text>"]},...}`, one entry per question of the request, each with a nonempty array of nonempty strings. The broker rejects the whole request if any key is missing or unknown.
 3. Deliver it with `bash ~/.claude/skills/codex-director/scripts/codex-worker.sh answer <job-id> <request-id> <answers-file> --cwd <repo>`. It checks the keys against the pending question before forwarding, forwards, and then confirms the question is gone. Run it alone in a foreground Bash call, never through a pipe or `grep`: a pipe hides the error line and replaces the exit code. It ends with one line, `ANSWERED job=<id> request=<id>` on success or `ANSWER_FAILED job=<id> request=<id> <reason>` otherwise; on `ANSWER_FAILED` read the reason before retrying: a validation failure (bad keys, bad shape, no such request) means nothing was sent and the question is untouched, but `still pending after answer` is reported after the forward already succeeded, so answering again answers twice. On that one, run `status --json` and only answer again if the request is really still listed. Do not send an ordinary message to answer a structured request.
 
-After `ANSWERED`, SendMessage the agent `answered, continue`; it reports the next event (on the Monitor path, the monitor does). An answered request is never reported as `QUESTION` again. A `QUESTION_PENDING` line arriving after you answered means the request is still open, so the answer was not accepted: run `status <job-id> --json` and answer again; if `job.live.questions` is empty, the request is closed and you only need to `continue`. Questions time out after 10 minutes by default and interrupt the turn; report that outcome without inventing an answer. Ordinary prose questions that already ended a turn still use `continue` in the same thread. Old plugins without `message` require an update; do not pretend that live delivery succeeded.
+After `ANSWERED` the job carries on by itself and the pane reports its next event. An answered request is never reported again. A `QUESTION_PENDING` line on the Monitor path arriving after you answered means the request is still open, so the answer was not accepted: run `status <job-id> --json` and answer again; if `job.live.questions` is empty, the request is closed and there is nothing to do. Questions time out after 10 minutes by default and interrupt the turn; report that outcome without inventing an answer. Ordinary prose questions that already ended a turn still use `continue` in the same thread. Old plugins without `message` require an update; do not pretend that live delivery succeeded.
 
 ### Notifications from Codex
 
-On plugins that expose the `notify_director` tool, Codex can send you a one-line note while it keeps working. It reaches you as the agent's `NOTIFIED` report (or a `NOTIFIED` line on the Monitor path); the job is still running. The line carries `pending_request=<n>` when a structured question was open at the moment the note was written; answer that request before anything else, because a `message` sent while it is pending is refused. Read the note and decide: start parallel work that it makes possible (for example, a test-writing task once the root cause is known), send the job a `message` if the note changes what it should do, or do nothing. Delivered notes are acknowledged and do not come back again; `/codex:status <job-id>` shows notes that have not been delivered yet. Codex is told to use the tool only for conclusions that change the plan, blockers, or a finished phase, so treat a note as worth reading, not as routine progress.
+On plugins that expose the `notify_director` tool, Codex can send you a one-line note while it keeps working. It reaches you as a `director.notified` line from the pane (or a `NOTIFIED` line on the Monitor path); the job is still running. The line carries `pending_request=<n>` when a structured question was open at the moment the note was written; answer that request before anything else, because a `message` sent while it is pending is refused. Read the note and decide: start parallel work that it makes possible (for example, a test-writing task once the root cause is known), send the job a `message` if the note changes what it should do, or do nothing. Delivered notes are acknowledged and do not come back again; `/codex:status <job-id>` shows notes that have not been delivered yet. Codex is told to use the tool only for conclusions that change the plan, blockers, or a finished phase, so treat a note as worth reading, not as routine progress.
 
 ### What Codex knows about you
 
