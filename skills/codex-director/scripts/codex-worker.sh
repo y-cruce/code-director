@@ -58,7 +58,6 @@ parse_input() {
     fi
   done < "$1"
   CWD="${CWD:-$PWD}"
-  [ "$MODEL" = spark ] && MODEL=gpt-5.3-codex-spark
 }
 
 # The note prepended to investigate/implement briefs so Codex knows who started it.

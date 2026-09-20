@@ -59,7 +59,7 @@ Alternative when the Agent tool is not available (SDK, headless) or for review m
 
 Sandbox: every Codex task runs without a sandbox (full read/write access and network), which is the user's standing policy; codex-worker passes `--sandbox danger-full-access` unless the header says otherwise. Read-only intent for `investigate` is stated in the brief, not enforced by the sandbox, so keep writing "read-only, do not modify files" into investigation briefs. `SANDBOX: network` (workspace-write plus network) or `SANDBOX: default` (the plugin's own read-only / workspace-write choice) narrow it for a single task; use them only when the user asks. On plugins without the `--sandbox` option the task runs in the plugin's default sandbox and cannot open sockets; a Codex report that tests could not run there is not a test failure.
 
-Prompt format: a few header lines, a blank line, then the brief body. `NAME: <a few words>` is required in every dispatch: say what the task does in three to eight words a reader can tell apart from the other tasks (for example `NAME: worker answer subcommand`, `NAME: root cause of brand fallback`), never a job id, a mode name, or a generic word like "task"; the name is stored on the job, printed as `<job-id> [<name>]` in status listings and after `job=<id>` in every monitor line. codex-worker refuses a dispatch without it (`NAME_REQUIRED`). Add `CWD: <absolute path>` when Codex must run in a repository other than the current directory (the script inherits your working directory otherwise). Add `SIBLINGS: <one line>` when other Codex tasks you started are still running: name each with its job ID and a few words on what it does. codex-worker copies the line into the note it prepends for Codex (see "What Codex knows about you" below).
+Prompt format: a few header lines, a blank line, then the brief body. `NAME: <a few words>` is required in every dispatch: say what the task does in three to eight words a reader can tell apart from the other tasks (for example `NAME: worker answer subcommand`, `NAME: root cause of brand fallback`), never a job id, a mode name, or a generic word like "task"; the name is stored on the job, printed as `<job-id> [<name>]` in status listings and after `job=<id>` in every monitor line. codex-worker refuses a dispatch without it (`NAME_REQUIRED`). Add `CWD: <absolute path>` when Codex must run in a repository other than the current directory (the script inherits your working directory otherwise). Add `SIBLINGS: <one line>` when other Codex tasks you started are still running: name each with its job ID and a few words on what it does. codex-worker copies the line into the note it prepends for Codex, which only `investigate` and `implement` get, so the header does nothing on a `continue` or a review (see "What Codex knows about you" below).
 
 ```
 MODE: investigate
@@ -88,7 +88,7 @@ The user's own instruction wins over this table, and `CODEX_DIRECTOR_EXECUTOR` s
 |---|---|---|
 | `codex` (default) | Codex through the plugin's app-server | — |
 | `qoder` | qodercli over ACP; the binary is found on PATH, then `~/.qoder/entry/qoder`, or `CODEX_DIRECTOR_QODER_COMMAND` | `EXECUTOR_MODE` (a Qoder session mode, e.g. `yolo`) |
-| `acp` | Any other agent speaking the Agent Client Protocol on stdio | `EXECUTOR_COMMAND` (required), `EXECUTOR_ARGS` (a JSON array), `EXECUTOR_MODE` |
+| `acp` | Any other agent speaking the Agent Client Protocol on stdio | `EXECUTOR_COMMAND` (or `$CODEX_COMPANION_ACP_COMMAND`; one of them is required), `EXECUTOR_ARGS` (a JSON array), `EXECUTOR_MODE` |
 
 `MODEL:` names the executor's own model. On Qoder two are worth knowing:
 
@@ -118,7 +118,7 @@ Codex runs on `gpt-6-astra` by default (set in `~/.codex/config.toml`, together 
 | Trace call chains, understand a module, implement a change from requirements | investigate / implement | high | The default for anything that spans several files |
 | Find the root cause of a bug or odd behavior | investigate | high | Start here; escalate to xhigh only if the high round comes back inconclusive |
 | Any follow-up on a problem that already has a thread | continue | unset | Put `THREAD: <id>` in the header; writes files only with `WRITE: yes` |
-| Standard code review | review | unset | Prefer providing `BASE: <ref>`, see below |
+| Standard code review | review | ignored | Prefer providing `BASE: <ref>`, see below; a review never reads `EFFORT`, and the untracked fallback runs at `high` |
 | Challenge the approach and assumptions | adversarial-review | unset | Body is the focus text; prefer providing `BASE: <ref>` |
 
 Picking the effort:
