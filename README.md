@@ -1,4 +1,4 @@
-# codex-director
+# code-director
 
 English | [中文](README.zh-CN.md)
 
@@ -52,7 +52,7 @@ Prerequisites:
 
 1. Claude Code (tested with 2.1.259)
 2. Codex CLI installed and logged in (tested with 0.152.1): `npm install -g @openai/codex && codex login`
-3. The Codex plugin for Claude Code, installed from this fork of the official plugin: [y-cruce/codex-plugin-cc](https://github.com/y-cruce/codex-plugin-cc). codex-director uses its `task --thread <id>`, tasks pane, Monitor integration, and live controls. In a terminal:
+3. The Codex plugin for Claude Code, installed from this fork of the official plugin: [y-cruce/codex-plugin-cc](https://github.com/y-cruce/codex-plugin-cc). code-director uses its `task --thread <id>`, tasks pane, Monitor integration, and live controls. In a terminal:
 
    ```bash
    claude plugin uninstall codex@openai-codex   # only if the official one is installed
@@ -65,8 +65,8 @@ Prerequisites:
 Install this repo:
 
 ```bash
-git clone https://github.com/y-cruce/codex-director.git
-cd codex-director
+git clone https://github.com/y-cruce/code-director.git
+cd code-director
 ./install.sh
 ```
 

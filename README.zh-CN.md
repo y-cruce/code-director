@@ -1,4 +1,4 @@
-# codex-director
+# code-director
 
 [English](README.md) | 中文
 
@@ -52,7 +52,7 @@ sequenceDiagram
 
 1. Claude Code（验证过 2.1.259）
 2. Codex CLI 已安装并登录（验证过 0.152.1）：`npm install -g @openai/codex && codex login`
-3. Claude Code 的 Codex 插件，从官方插件的 fork 安装：[y-cruce/codex-plugin-cc](https://github.com/y-cruce/codex-plugin-cc)。codex-director 使用其中的 `task --thread <id>`、任务面板、Monitor 集成和实时控制。在终端执行：
+3. Claude Code 的 Codex 插件，从官方插件的 fork 安装：[y-cruce/codex-plugin-cc](https://github.com/y-cruce/codex-plugin-cc)。code-director 使用其中的 `task --thread <id>`、任务面板、Monitor 集成和实时控制。在终端执行：
 
    ```bash
    claude plugin uninstall codex@openai-codex   # 装过官方版才需要
@@ -65,8 +65,8 @@ sequenceDiagram
 安装本仓库：
 
 ```bash
-git clone https://github.com/y-cruce/codex-director.git
-cd codex-director
+git clone https://github.com/y-cruce/code-director.git
+cd code-director
 ./install.sh
 ```
 
