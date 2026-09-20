@@ -8,7 +8,7 @@ Use it when you run both Claude Code and Codex (ChatGPT subscription), Claude's 
 
 ## What it consists of
 
-Four files and one config snippet:
+Two installed files and one config snippet:
 
 | File | Purpose |
 |---|---|
@@ -31,9 +31,9 @@ sequenceDiagram
         C->>X: codex-worker.sh dispatch (MODE: implement)
         C->>X: codex-worker.sh dispatch (MODE: investigate)
     end
-    Note over P: the pane watches every job of the session and draws its live Codex trace
+    Note over P: the pane draws every job and arms one events Monitor per active repository
     X-->>P: job.completed (or question.opened, director.notified, job.failed)
-    P-->>C: submits a prompt naming the task, which starts a turn
+    P-->>C: Monitor notification reaches the current turn
     C->>X: answers or reacts through the worker
     C->>X: MODE: adversarial-review (detached; reported by an event monitor)
     C->>X: MODE: continue, WRITE: yes (Codex fixes its own findings, same thread)
@@ -44,18 +44,7 @@ sequenceDiagram
 
 ## Relationship to the official Codex plugin
 
-This depends on the Codex plugin for Claude Code. Every call to Codex goes through its `codex-companion.mjs` script. The recommended install is [y-cruce/codex-plugin-cc](https://github.com/y-cruce/codex-plugin-cc), a fork of [openai/codex-plugin-cc](https://github.com/openai/codex-plugin-cc) that adds `task --thread <id>` (submitted upstream as [#719](https://github.com/openai/codex-plugin-cc/pull/719)); nothing else in the plugin is changed. This repo adds a layer of delegation rules and a dispatch script on top.
-
-The plugin ships its own forwarder, `codex:codex-rescue`. The differences:
-
-| | Official codex-rescue | codex-director (this repo) |
-|---|---|---|
-| Trigger | User runs `/codex:rescue`, or Claude asks for help when stuck | Claude delegates by default according to the rules; the user never has to mention Codex |
-| Writes files by default | Yes (`--write`) | Depends on MODE: `investigate` is read-only, only `implement` writes |
-| Long runs | Waits in the foreground and gets killed at Claude Code's 10-minute Bash limit | Starts Codex in the background and returns in seconds; the plugin's tasks pane watches the job and wakes the director on each actionable event, so Codex can run as long as it needs |
-| Review input | Working-tree mode inlines the content of every untracked file into the prompt; repos with many untracked files exceed Codex's input limit | Uses branch mode when a base ref is given; otherwise counts untracked files and, above 3, falls back to a read-only task that reviews via git itself |
-| Output | Verbatim | Verbatim, read with `result <job-id>` |
-| Language | English | All prompts and rules are in English; neither Codex nor Claude is forced to answer in a particular language |
+This depends on the Codex plugin for Claude Code. Every call to Codex goes through its `codex-companion.mjs` script. The recommended install is [y-cruce/codex-plugin-cc](https://github.com/y-cruce/codex-plugin-cc), a fork of [openai/codex-plugin-cc](https://github.com/openai/codex-plugin-cc) that includes `task --thread <id>` (submitted upstream as [#719](https://github.com/openai/codex-plugin-cc/pull/719)), background task control, durable observation, the tasks pane, and multi-executor support. This repo adds the delegation rules and dispatch script that use those capabilities. The old `codex-rescue` and `codex-task` forwarding agents are no longer part of the workflow.
 
 ## Install
 
@@ -63,7 +52,7 @@ Prerequisites:
 
 1. Claude Code (tested with 2.1.259)
 2. Codex CLI installed and logged in (tested with 0.152.1): `npm install -g @openai/codex && codex login`
-3. The Codex plugin for Claude Code, installed from this fork of the official plugin: [y-cruce/codex-plugin-cc](https://github.com/y-cruce/codex-plugin-cc). It is upstream 1.0.6 plus `task --thread <id>` ([openai/codex-plugin-cc#719](https://github.com/openai/codex-plugin-cc/pull/719)), which codex-director needs to keep one Codex thread per problem. In a terminal:
+3. The Codex plugin for Claude Code, installed from this fork of the official plugin: [y-cruce/codex-plugin-cc](https://github.com/y-cruce/codex-plugin-cc). codex-director uses its `task --thread <id>`, tasks pane, Monitor integration, and live controls. In a terminal:
 
    ```bash
    claude plugin uninstall codex@openai-codex   # only if the official one is installed
@@ -71,7 +60,7 @@ Prerequisites:
    claude plugin install codex@y-cruce-codex
    ```
 
-   Then run `/codex:setup` in Claude Code and confirm it reports ready. The official plugin also works, but without `--thread` codex-worker can only resume the most recent thread (see "Thread continuity").
+   Then run `/codex:setup` in Claude Code and confirm it reports ready.
 
 Install this repo:
 
@@ -81,7 +70,7 @@ cd codex-director
 ./install.sh
 ```
 
-The script copies the agent, the skill, and the worker script into `~/.claude/`. Then append the snippet from `docs/claude-md-snippet.md` to `~/.claude/CLAUDE.md` and run `/reload-plugins` in Claude Code, or start a new session.
+The script copies the skill and worker script into `~/.claude/` and removes forwarding agents left by older versions. Then append the snippet from `docs/claude-md-snippet.md` to `~/.claude/CLAUDE.md` and run `/reload-plugins` in Claude Code, or start a new session.
 
 ## Usage
 
@@ -152,7 +141,7 @@ With a plugin that supports `task --thread <id>` ([openai/codex-plugin-cc#719](h
 
 ### Checking progress
 
-While Codex is running, `/codex:status` lists the running and recently finished jobs in the current repo with their current phase. `/codex:result <job-id>` shows the full output of one job.
+While Codex is running, `/codex:status` lists the running and recently finished jobs in the current repo with their current phase. `/codex:result <job-id>` shows the full output of one job. The tasks pane follows the end of a growing trace while you stay at the bottom and stops following when you scroll up; a finished task remains in the pane for fifteen minutes.
 
 ## Design decisions
 
@@ -182,19 +171,17 @@ While Codex is running, `/codex:status` lists the running and recently finished 
 
 With a plugin version supporting live controls, `/codex:message <job-id> <text>` appends input to the running turn. Add `--interrupt` to cancel that turn and continue the same job and thread with the new direction. Existing edits remain and write permissions do not change. Acceptance means queued for a later model request, not that the instruction has already been followed.
 
-For automatic corrections, run `bash ~/.claude/skills/codex-director/scripts/codex-worker.sh message <job-id> <prompt-file> --cwd <repo> [--interrupt]`: success prints only `MESSAGED job=<id>`; failure prints `MESSAGE_FAILED job=<id> <reason>` and exits nonzero; an unsupported plugin prints `MESSAGE_UNSUPPORTED:` and exits 2. **Anything urgent goes through this command, not through the agent.** The host queues messages for a busy agent and never interrupts a running tool, so a message sent to an agent waiting inside `follow` can sit for up to nine minutes; the director's own Bash calls are unaffected.
+For automatic corrections, run `bash ~/.claude/skills/codex-director/scripts/codex-worker.sh message <job-id> <prompt-file> --cwd <repo> [--interrupt]`: success prints only `MESSAGED job=<id>`; failure prints `MESSAGE_FAILED job=<id> <reason>` and exits nonzero; an unsupported plugin prints `MESSAGE_UNSUPPORTED:` and exits 2. There is no relay agent: the director sends every correction through this worker call. Use `--interrupt` when the current turn must stop, or omit it when the correction can wait for Codex's next model request.
 
-When the correction can wait for the agent's next round, write a prompt file and SendMessage the task's agent `MESSAGE_FILE: <absolute path>` (optionally add `INTERRUPT: yes`). The agent forwards it with its saved job id and repository, then resumes following from its cursor without printing the file.
-
-**Anything else sent to the agent is forwarded to Codex.** Text that is not routing is written to a file by the agent and delivered verbatim, so a correction never dies in the agent's inbox; the file form stays preferable for anything long or containing code. A bare `continue` only resumes following, and a new round requires the `DISPATCH_FILE:` / `CWD:` / `NAME:` triple. If the last report was `QUESTION`, the message must explicitly state that it has already been answered through `answer`; otherwise the agent returns `MESSAGE_REFUSED job=<id> question pending, answer it first`, because only `answer` with the question id resolves a structured question. On refusal, answer first; on failure, fix the error or update the plugin before resending.
+A new round on the same problem is another `dispatch` with `MODE: continue` and its `THREAD:`. If a structured question is pending, answer it through `answer` before sending an ordinary message; the worker refuses messages while that request is open.
 
 For a structured question, the director receives a `question.opened` line from the tasks pane (or a `QUESTION` event from the monitor on that path) while Codex remains active. A request is reported as `QUESTION` only once and only while it is still open; an answered request is never reported again, and a request that comes up a second time while still unanswered arrives as `QUESTION_PENDING`, telling the director to check status rather than answer blindly. It supplies an answers-map JSON file, such as `{"<question-id>":{"answers":["..."]}}`, through `/codex:answer <job-id> --request-id <id> --answers-file <path>`, using the question IDs from status as keys. Questions time out after 10 minutes. `/codex:status <job-id>` exposes pending messages, questions, notifications, and interruption state.
 
 From Bash, use `codex-worker.sh answer <job-id> <request-id> <answers-file> --cwd <repo>`. It checks the pending request, exact question IDs, and nonempty answers before sending, then checks status again; success prints `ANSWERED job=<id> request=<id>`, and failure prints `ANSWER_FAILED` with details and exits 1. `--cwd` can appear anywhere after `answer` and defaults to the current directory; relative answers-file paths resolve against that directory.
 
-**Nothing waits on a job.** The director writes the dispatch text to a file, runs `codex-worker.sh dispatch` on it, and moves on; the call returns in seconds with the job id and thread. The plugin's tasks pane watches every job the session started, draws its live Codex trace, and submits a prompt when one produces an event the director must act on — a completion, a question, a note, a failure. `/codex:tasks` opens the pane and switches between tasks. `codex-worker.sh follow <job-id>` still blocks on one job's event stream for scripts, headless runs, and the times the director means to wait.
+**Nothing waits on a job.** The director writes the dispatch text to a file, runs `codex-worker.sh dispatch` on it, and moves on; the call returns in seconds with the job id and thread. The plugin's tasks pane watches every job the session started, draws its live Codex trace, and automatically arms one `events` Monitor per repository with a live job. Its background notification can report completion, questions, notes, failures, and a fifteen-minute `STALLED` condition during the current turn. A monitored repository is excluded from the pane's prompt-submit path, so the same event does not wake the director twice. `/codex:tasks` opens the pane and switches between tasks. `codex-worker.sh follow <job-id>` still blocks on one job's event stream for scripts, headless runs, and the times the director means to wait.
 
-**An event monitor is still available.** `codex-worker.sh events --cwd <repo>` streams the same events (`DONE`, `FAILED`, `QUESTION`, `QUESTION_PENDING`, `NOTIFIED`, `STALLED`) for a Claude Code Monitor; it is the path for review modes, which start detached without a job id, and for headless runs. The plugin repeats `QUESTION_PENDING` every 2 minutes while a question is unanswered. The stream exits on its own after an hour without an active job, printing a final `IDLE_EXIT` line.
+The host ends an automatically armed Monitor after thirty minutes; the pane re-arms it while a live job remains. Review dispatch starts detached and does not immediately return a job id, but the pane discovers its job file by Claude session and can display it; the Monitor reliably supplies the terminal job id. When the pane is absent (SDK, headless, or hooks unavailable), arm `codex-worker.sh events --cwd <repo>` yourself before dispatch. A manual stream repeats `QUESTION_PENDING` every 2 minutes, emits `STALLED` after 15 minutes without progress, and exits after an hour without an active job with `IDLE_EXIT`. Unknown `events` and `follow` options are rejected with the supported options named.
 
 Codex knows who started it. For `investigate` and `implement`, the worker script prepends a short note to the brief: Codex was started by a director agent rather than a human, `request_user_input` questions go to the director, other Codex tasks may be running (listed from the director's `SIBLINGS:` header) and Codex must not coordinate with them itself. On plugins that expose the `notify_director` tool, Codex can also send the director a one-line note without stopping; it arrives as a `NOTIFIED` event while the job keeps running, carrying `pending_request=<id>` when a structured question was open at that moment so the director answers it instead of sending a message. Codex tasks never talk to each other; the director relays.
 
