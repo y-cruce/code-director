@@ -12,8 +12,8 @@ Two installed files and one config snippet:
 
 | File | Purpose |
 |---|---|
-| `skills/codex-director/SKILL.md` | Working rules for the Claude main thread: what to delegate, how to write a brief, how to run things in parallel, how the review loop works |
-| `skills/codex-director/scripts/codex-worker.sh` | All dispatch logic: picks the Codex command by MODE, prepends the director note, starts Codex through the plugin's `codex-companion.mjs`, waits, collects; `dispatch` starts a job in one call, `follow` blocks on a job's event stream until the director must act, `events` streams job events for a monitor |
+| `skills/code-director/SKILL.md` | Working rules for the Claude main thread: what to delegate, how to write a brief, how to run things in parallel, how the review loop works |
+| `skills/code-director/scripts/codex-worker.sh` | All dispatch logic: picks the Codex command by MODE, prepends the director note, starts Codex through the plugin's `codex-companion.mjs`, waits, collects; `dispatch` starts a job in one call, `follow` blocks on a job's event stream until the director must act, `events` streams job events for a monitor |
 | `docs/claude-md-snippet.md` | A routing rule for `CLAUDE.md` so that matching tasks always go through this path |
 
 Flow:
@@ -26,7 +26,7 @@ sequenceDiagram
     participant X as Codex
 
     U->>C: describes the task
-    C->>C: loads codex-director, writes a brief
+    C->>C: loads code-director, writes a brief
     par parallel dispatch, one Bash call each
         C->>X: codex-worker.sh dispatch (MODE: implement)
         C->>X: codex-worker.sh dispatch (MODE: investigate)
@@ -82,7 +82,7 @@ Make order export asynchronous and send an email when it finishes
 Review the changes on this branch
 ```
 
-Claude loads codex-director, writes a brief, dispatches it, acts on the events the tasks pane raises, spot-checks, and reports. You can also name it directly: "ask codex to look into X".
+Claude loads code-director, writes a brief, dispatches it, acts on the events the tasks pane raises, spot-checks, and reports. You can also name it directly: "ask codex to look into X".
 
 ### Brief format
 
@@ -171,7 +171,7 @@ While Codex is running, `/codex:status` lists the running and recently finished 
 
 With a plugin version supporting live controls, `/codex:message <job-id> <text>` appends input to the running turn. Add `--interrupt` to cancel that turn and continue the same job and thread with the new direction. Existing edits remain and write permissions do not change. Acceptance means queued for a later model request, not that the instruction has already been followed.
 
-For automatic corrections, run `bash ~/.claude/skills/codex-director/scripts/codex-worker.sh message <job-id> <prompt-file> --cwd <repo> [--interrupt]`: success prints only `MESSAGED job=<id>`; failure prints `MESSAGE_FAILED job=<id> <reason>` and exits nonzero; an unsupported plugin prints `MESSAGE_UNSUPPORTED:` and exits 2. There is no relay agent: the director sends every correction through this worker call. Use `--interrupt` when the current turn must stop, or omit it when the correction can wait for Codex's next model request.
+For automatic corrections, run `bash ~/.claude/skills/code-director/scripts/codex-worker.sh message <job-id> <prompt-file> --cwd <repo> [--interrupt]`: success prints only `MESSAGED job=<id>`; failure prints `MESSAGE_FAILED job=<id> <reason>` and exits nonzero; an unsupported plugin prints `MESSAGE_UNSUPPORTED:` and exits 2. There is no relay agent: the director sends every correction through this worker call. Use `--interrupt` when the current turn must stop, or omit it when the correction can wait for Codex's next model request.
 
 A new round on the same problem is another `dispatch` with `MODE: continue` and its `THREAD:`. If a structured question is pending, answer it through `answer` before sending an ordinary message; the worker refuses messages while that request is open.
 
@@ -185,7 +185,7 @@ The host ends an automatically armed Monitor after thirty minutes; the pane re-a
 
 Codex knows who started it. For `investigate` and `implement`, the worker script prepends a short note to the brief: Codex was started by a director agent rather than a human, `request_user_input` questions go to the director, other Codex tasks may be running (listed from the director's `SIBLINGS:` header) and Codex must not coordinate with them itself. On plugins that expose the `notify_director` tool, Codex can also send the director a one-line note without stopping; it arrives as a `NOTIFIED` event while the job keeps running, carrying `pending_request=<id>` when a structured question was open at that moment so the director answers it instead of sending a message. Codex tasks never talk to each other; the director relays.
 
-All command selection, review fallbacks, and the director note live in `skills/codex-director/scripts/codex-worker.sh` (`dispatch` is `launch` plus `collect`), so the logic can be tested with `bash -n` and a stub companion.
+All command selection, review fallbacks, and the director note live in `skills/code-director/scripts/codex-worker.sh` (`dispatch` is `launch` plus `collect`), so the logic can be tested with `bash -n` and a stub companion.
 
 Native next-turn queues are distinct from these mid-turn controls. Update the installed plugin and restart the Claude session to use the new broker; editing this checkout does not update installed copies.
 

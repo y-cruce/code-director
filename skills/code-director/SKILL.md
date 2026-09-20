@@ -1,9 +1,9 @@
 ---
-name: codex-director
+name: code-director
 description: A way of working where Codex is the default executor and Claude only directs. Load this skill for any task that involves reading code to understand current behavior, finding the root cause of a bug, implementing a change from requirements, reviewing a diff, or getting a second opinion, and whenever the user says "ask codex", "let codex look", or "use codex". Follow the process to dispatch work to Codex; Claude only writes the brief, judges the result, and makes the calls.
 ---
 
-# Codex director mode
+# Code director mode
 
 Premise: the scarce resource is the Claude main thread's context and output. Therefore:
 
@@ -14,7 +14,7 @@ Premise: the scarce resource is the Claude main thread's context and output. The
 
 ## Dispatching
 
-All dispatch logic lives in `~/.claude/skills/codex-director/scripts/codex-worker.sh` (which Codex command to run, the director note, sandbox flags, review fallbacks). One dispatch is two calls. First write the dispatch text to a file with the Write tool (in your scratchpad directory, one file per task, for example `<scratchpad>/codex/locate-answer-validation.md`; the script copies it into its own work directory, so several files in one folder can be dispatched at the same time):
+All dispatch logic lives in `~/.claude/skills/code-director/scripts/codex-worker.sh` (which Codex command to run, the director note, sandbox flags, review fallbacks). One dispatch is two calls. First write the dispatch text to a file with the Write tool (in your scratchpad directory, one file per task, for example `<scratchpad>/codex/locate-answer-validation.md`; the script copies it into its own work directory, so several files in one folder can be dispatched at the same time):
 
 ```
 MODE: investigate
@@ -28,7 +28,7 @@ CWD: /abs/path/to/repo
 Then one foreground Bash call that starts it and returns in seconds:
 
 ```
-bash ~/.claude/skills/codex-director/scripts/codex-worker.sh dispatch < <that file's absolute path>
+bash ~/.claude/skills/code-director/scripts/codex-worker.sh dispatch < <that file's absolute path>
 ```
 
 It prints `STATUS: started`, `JOB:`, `NAME:`, `THREAD:` and sometimes a `NOTE:` line, or `STATUS: failed` / `ERROR:` when the dispatch itself is wrong — fix it and dispatch again. Several dispatches go in one message as separate Bash calls. Keep each job id together with its repository and its thread.
@@ -43,7 +43,7 @@ A Codex task may run for any length of time. Do not re-dispatch because it is ta
 
 Nothing blocks on a job. The Monitor prints one line when a job produces an event you must act on; its task notification can arrive during the current turn. The pane keeps the trace current at the same time. If no Monitor covers that repository, the pane can submit a compact `Codex tasks` prompt once the session is idle. Use the `NAME:` you gave at dispatch, not the job id, when telling the user which task something belongs to. Five kinds arrive:
 
-- `DONE` / `job.completed`: run `node "$(bash ~/.claude/skills/codex-director/scripts/codex-worker.sh companion)" result <job-id> --cwd <repo>` in a foreground Bash call and judge the output as usual.
+- `DONE` / `job.completed`: run `node "$(bash ~/.claude/skills/code-director/scripts/codex-worker.sh companion)" result <job-id> --cwd <repo>` in a foreground Bash call and judge the output as usual.
 - `FAILED` / `job.failed` / `job.cancelled`: report the reason to the user.
 - `QUESTION` / `question.opened`: run `status <job-id> --cwd <repo> --json` on the same companion to read the questions and answer them (below). The job stays alive, waiting.
 - `NOTIFIED` / `director.notified`: a one-line note from Codex while it keeps working; react if it changes the plan. The job never paused.
@@ -53,7 +53,7 @@ The Monitor can deliver while you are mid-turn. A repository covered by a Monito
 
 To watch a job's trace as it runs, `/codex:tasks` opens the pane and `/codex:tasks <n>` or a fragment of its name switches to one. To block on a single job instead, `codex-worker.sh follow <job-id> --cwd <repo> [--after <cursor>]` prints the same events and returns on the first one that needs you; it is a tool for when you want to wait, not the normal path.
 
-The pane arms its Monitor automatically, one per repository, and re-arms it whenever it ends while a live job remains there -- the host ends one after thirty minutes, and the stream ends itself once the repository has been quiet. When the pane is not running (SDK, headless, or hooks unavailable), arm one yourself before the first dispatch with `bash ~/.claude/skills/codex-director/scripts/codex-worker.sh events --cwd <repo>` (description: "Codex job events in <repo>"; a worktree counts as its own repository). Read `DONE`, `FAILED`, `QUESTION`, `NOTIFIED`, `STALLED`, and the two `QUESTION_PENDING` forms from it; on `DONE` read the output with `result <job-id>`. A manually armed stream exits after an hour without an active job, ending with `IDLE_EXIT`, so arm a fresh one before the next dispatch. Defaults are `--poll-ms` 2s, `--stall-ms` 15m, `--question-remind-ms` 2m and `--exit-idle-ms` 1h. Current plugins reject unknown `events` and `follow` flags, name the supported options, and exit non-zero.
+The pane arms its Monitor automatically, one per repository, and re-arms it whenever it ends while a live job remains there -- the host ends one after thirty minutes, and the stream ends itself once the repository has been quiet. When the pane is not running (SDK, headless, or hooks unavailable), arm one yourself before the first dispatch with `bash ~/.claude/skills/code-director/scripts/codex-worker.sh events --cwd <repo>` (description: "Codex job events in <repo>"; a worktree counts as its own repository). Read `DONE`, `FAILED`, `QUESTION`, `NOTIFIED`, `STALLED`, and the two `QUESTION_PENDING` forms from it; on `DONE` read the output with `result <job-id>`. A manually armed stream exits after an hour without an active job, ending with `IDLE_EXIT`, so arm a fresh one before the next dispatch. Defaults are `--poll-ms` 2s, `--stall-ms` 15m, `--question-remind-ms` 2m and `--exit-idle-ms` 1h. Current plugins reject unknown `events` and `follow` flags, name the supported options, and exit non-zero.
 
 Sandbox: every Codex task runs without a sandbox (full read/write access and network), which is the user's standing policy; codex-worker passes `--sandbox danger-full-access` unless the header says otherwise. Read-only intent for `investigate` is stated in the brief, not enforced by the sandbox, so keep writing "read-only, do not modify files" into investigation briefs. `SANDBOX: network` (workspace-write plus network) or `SANDBOX: default` (the plugin's own read-only / workspace-write choice) narrow it for a single task; use them only when the user asks. On plugins without the `--sandbox` option the task runs in the plugin's default sandbox and cannot open sockets; a Codex report that tests could not run there is not a test failure.
 
@@ -162,7 +162,7 @@ Everything reaches a running job through the worker, in a Bash call of your own:
 
 A correction goes in a file, not inline: write it with the Write tool and pass the path. Answer a pending structured question before sending an ordinary message — while one is open the message is refused, and the refusal names the request.
 
-For direct Bash delivery, use `bash ~/.claude/skills/codex-director/scripts/codex-worker.sh message <job-id> <prompt-file> --cwd <repo> [--interrupt]`. It prints only `MESSAGED job=<id>` on success, or `MESSAGE_FAILED job=<id> <reason>` on failure; unsupported plugins return `MESSAGE_UNSUPPORTED:` and exit 2. Keep the job ID with its repository and thread. Success means accepted for the next model request, not that the instruction has already been followed. The slash command `/codex:message <job-id> <text>` remains user-facing shorthand. Use the worker for automatic `message` and `answer` calls; `status` and `result` still use the selected companion with `--cwd <repo>`. Do not invoke these commands as skills.
+For direct Bash delivery, use `bash ~/.claude/skills/code-director/scripts/codex-worker.sh message <job-id> <prompt-file> --cwd <repo> [--interrupt]`. It prints only `MESSAGED job=<id>` on success, or `MESSAGE_FAILED job=<id> <reason>` on failure; unsupported plugins return `MESSAGE_UNSUPPORTED:` and exit 2. Keep the job ID with its repository and thread. Success means accepted for the next model request, not that the instruction has already been followed. The slash command `/codex:message <job-id> <text>` remains user-facing shorthand. Use the worker for automatic `message` and `answer` calls; `status` and `result` still use the selected companion with `--cwd <repo>`. Do not invoke these commands as skills.
 
 Use `/codex:message <job-id> --interrupt <text>` when the current approach must stop. It cancels the turn and continues the same job and thread with the new instruction, retaining its original write permission. Report the returned partial changes; interruption does not undo files. Do not use this to escalate a read-only task's permissions.
 
@@ -170,7 +170,7 @@ On `STATUS: waiting-for-answer`, the Codex job remains running. Read the returne
 
 1. Take the question ids from the `status --json` output: `job.live.questions[]` lists each pending request with its `requestId` and `questions[]`, and every question has an `id`. Those ids are the only valid keys of the answers file; never make a key up or copy one from an example.
 2. Write the answers file as a JSON map keyed by those ids: `{"<question-id>":{"answers":["<answer text>"]},...}`, one entry per question of the request, each with a nonempty array of nonempty strings. The broker rejects the whole request if any key is missing or unknown.
-3. Deliver it with `bash ~/.claude/skills/codex-director/scripts/codex-worker.sh answer <job-id> <request-id> <answers-file> --cwd <repo>`. It checks the keys against the pending question before forwarding, forwards, and then confirms the question is gone. Run it alone in a foreground Bash call, never through a pipe or `grep`: a pipe hides the error line and replaces the exit code. It ends with one line, `ANSWERED job=<id> request=<id>` on success or `ANSWER_FAILED job=<id> request=<id> <reason>` otherwise; on `ANSWER_FAILED` read the reason before retrying: a validation failure (bad keys, bad shape, no such request) means nothing was sent and the question is untouched, but `still pending after answer` is reported after the forward already succeeded, so answering again answers twice. On that one, run `status --json` and only answer again if the request is really still listed. Do not send an ordinary message to answer a structured request.
+3. Deliver it with `bash ~/.claude/skills/code-director/scripts/codex-worker.sh answer <job-id> <request-id> <answers-file> --cwd <repo>`. It checks the keys against the pending question before forwarding, forwards, and then confirms the question is gone. Run it alone in a foreground Bash call, never through a pipe or `grep`: a pipe hides the error line and replaces the exit code. It ends with one line, `ANSWERED job=<id> request=<id>` on success or `ANSWER_FAILED job=<id> request=<id> <reason>` otherwise; on `ANSWER_FAILED` read the reason before retrying: a validation failure (bad keys, bad shape, no such request) means nothing was sent and the question is untouched, but `still pending after answer` is reported after the forward already succeeded, so answering again answers twice. On that one, run `status --json` and only answer again if the request is really still listed. Do not send an ordinary message to answer a structured request.
 
 After `ANSWERED` the job carries on by itself and the pane reports its next event. An answered request is never reported again. A `QUESTION_PENDING` line on the Monitor path arriving after you answered means the request is still open, so the answer was not accepted: run `status <job-id> --json` and answer again; if `job.live.questions` is empty, the request is closed and there is nothing to do. Questions time out after 10 minutes by default and interrupt the turn; report that outcome without inventing an answer. Ordinary prose questions that already ended a turn still use `continue` in the same thread. Old plugins without `message` require an update; do not pretend that live delivery succeeded.
 
