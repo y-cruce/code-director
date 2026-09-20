@@ -11,13 +11,16 @@ rm -f "$DEST/agents/codex-worker.md" "$DEST/agents/codex-task.md"
 # The skill was `codex-director` before it took executors other than Codex;
 # left in place it loads beside the new one as a second, stale copy.
 rm -rf "$DEST/skills/codex-director"
+# `codex-worker.sh` is `dispatch.sh` now; a copy left behind is a second
+# script the plugin may still resolve to.
+rm -f "$DEST/skills/code-director/scripts/codex-worker.sh"
 cp "$HERE/skills/code-director/SKILL.md" "$DEST/skills/code-director/SKILL.md"
-cp "$HERE/skills/code-director/scripts/codex-worker.sh" "$DEST/skills/code-director/scripts/codex-worker.sh"
-chmod +x "$DEST/skills/code-director/scripts/codex-worker.sh"
+cp "$HERE/skills/code-director/scripts/dispatch.sh" "$DEST/skills/code-director/scripts/dispatch.sh"
+chmod +x "$DEST/skills/code-director/scripts/dispatch.sh"
 
 echo "Installed:"
 echo "  $DEST/skills/code-director/SKILL.md"
-echo "  $DEST/skills/code-director/scripts/codex-worker.sh"
+echo "  $DEST/skills/code-director/scripts/dispatch.sh"
 echo
 echo "One step left: append the snippet in docs/claude-md-snippet.md to $DEST/CLAUDE.md."
 echo "Then run /reload-plugins in Claude Code, or start a new session."

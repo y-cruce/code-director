@@ -1,19 +1,19 @@
 #!/usr/bin/env bash
 # Shell side of Codex dispatching, called by the director (Claude main thread) from Bash:
-#   codex-worker.sh dispatch [input-file]  read the brief from the file or stdin, start Codex, return at once with
+#   dispatch.sh dispatch [input-file]  read the brief from the file or stdin, start Codex, return at once with
 #                                          STATUS: started / JOB / NAME / THREAD (launch + collect in one call)
-#   codex-worker.sh follow <job-id> --cwd <repo> [--after <cursor>] [--max-seconds <n>] [--until done]
+#   dispatch.sh follow <job-id> --cwd <repo> [--after <cursor>] [--max-seconds <n>] [--until done]
 #                                          block and print the job's event stream until something the director must act on
 #                                          (DONE/FAILED/QUESTION/QUESTION_PENDING/NOTIFIED/STALLED/TIMEOUT)
-#   codex-worker.sh events --cwd <repo>    stream job events (one line each) for a Monitor; needs a plugin with `events`
-#   codex-worker.sh message <job-id> <prompt-file> [--cwd <repo>] [--interrupt]
+#   dispatch.sh events --cwd <repo>    stream job events (one line each) for a Monitor; needs a plugin with `events`
+#   dispatch.sh message <job-id> <prompt-file> [--cwd <repo>] [--interrupt]
 #                                          forward a correction; print MESSAGED or MESSAGE_FAILED
-#   codex-worker.sh answer <job-id> <request-id> <answers-file> [--cwd <repo>]
+#   dispatch.sh answer <job-id> <request-id> <answers-file> [--cwd <repo>]
 #                                          deliver answers to a structured question
-#   codex-worker.sh companion              print the selected codex-companion.mjs path
+#   dispatch.sh companion              print the selected codex-companion.mjs path
 # Building blocks of dispatch, also usable on their own:
-#   codex-worker.sh launch <input-file>    parse the header lines, start Codex, print WORK=... JOB=... STARTED
-#   codex-worker.sh collect <WORK>         print the STATUS / JOB / NAME / THREAD lines
+#   dispatch.sh launch <input-file>    parse the header lines, start Codex, print WORK=... JOB=... STARTED
+#   dispatch.sh collect <WORK>         print the STATUS / JOB / NAME / THREAD lines
 #
 # Input file format: `KEY: value` header lines, a blank line, then the brief body.
 # Headers: NAME (required task name), MODE (investigate|implement|review|adversarial-review|continue), EFFORT, MODEL, BASE, WRITE, THREAD,
@@ -98,7 +98,7 @@ do_launch() {
   local input="$1"
   # Every launch gets its own work directory: several dispatch files may sit in one
   # folder and be launched at the same time, so nothing is written next to the input.
-  WORK=$(mktemp -d "${TMPDIR:-/tmp}/codex-worker.XXXXXX")
+  WORK=$(mktemp -d "${TMPDIR:-/tmp}/dispatch.sh.XXXXXX")
   cp "$input" "$WORK/input.md"
   parse_input "$WORK/input.md"
   if [ -z "$NAME" ]; then
@@ -326,7 +326,7 @@ PY
 do_dispatch() {
   local input="${1:-}" launched
   if [ -z "$input" ]; then
-    input=$(mktemp -d "${TMPDIR:-/tmp}/codex-worker.XXXXXX")/input.md
+    input=$(mktemp -d "${TMPDIR:-/tmp}/dispatch.sh.XXXXXX")/input.md
     cat > "$input"
   fi
   # launch prints WORK= / JOB= / STARTED for the building-block flow; dispatch reports only collect's lines.
@@ -366,7 +366,7 @@ do_message() {
   done
   job="${args[0]:-unknown}"
   if [ "${#args[@]}" -ne 2 ]; then
-    echo "MESSAGE_FAILED job=$job usage: codex-worker.sh message <job-id> <prompt-file> [--cwd <repo>] [--interrupt]"; return 1
+    echo "MESSAGE_FAILED job=$job usage: dispatch.sh message <job-id> <prompt-file> [--cwd <repo>] [--interrupt]"; return 1
   fi
   CC=$(select_companion)
   if [ -z "$CC" ] || ! grep -q 'case "message":' "$CC" 2>/dev/null; then
@@ -398,7 +398,7 @@ do_answer() {
     esac
   done
   if [ "${#args[@]}" -ne 3 ]; then
-    echo 'usage: codex-worker.sh answer <job-id> <request-id> <answers-file> [--cwd <repo>]'; return 1
+    echo 'usage: dispatch.sh answer <job-id> <request-id> <answers-file> [--cwd <repo>]'; return 1
   fi
   CC=$(select_companion)
   node - "$CC" "$cwd" "${args[@]}" <<'NODE'
@@ -448,12 +448,12 @@ NODE
 
 case "${1:-}" in
   dispatch)  do_dispatch "${2:-}" ;;
-  launch)    [ "$#" -ge 2 ] || { echo "usage: codex-worker.sh launch <input-file>"; exit 1; }; do_launch "$2" ;;
-  collect)   [ "$#" -ge 2 ] || { echo "usage: codex-worker.sh collect <WORK>"; exit 1; }; do_collect "$2" ;;
+  launch)    [ "$#" -ge 2 ] || { echo "usage: dispatch.sh launch <input-file>"; exit 1; }; do_launch "$2" ;;
+  collect)   [ "$#" -ge 2 ] || { echo "usage: dispatch.sh collect <WORK>"; exit 1; }; do_collect "$2" ;;
   companion) select_companion ;;
   events)    shift; do_events "$@" ;;
   follow)    shift; do_follow "$@" ;;
   message)   shift; do_message "$@" ;;
   answer)    shift; do_answer "$@" ;;
-  *) echo "usage: codex-worker.sh dispatch [input-file] | launch <input-file> | collect <WORK> | companion | events --cwd <repo> | follow <job-id> --cwd <repo> [--after <cursor>] | message <job-id> <prompt-file> [--cwd <repo>] [--interrupt] | answer <job-id> <request-id> <answers-file> [--cwd <repo>]"; exit 1 ;;
+  *) echo "usage: dispatch.sh dispatch [input-file] | launch <input-file> | collect <WORK> | companion | events --cwd <repo> | follow <job-id> --cwd <repo> [--after <cursor>] | message <job-id> <prompt-file> [--cwd <repo>] [--interrupt] | answer <job-id> <request-id> <answers-file> [--cwd <repo>]"; exit 1 ;;
 esac

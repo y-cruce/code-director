@@ -2,9 +2,9 @@
 
 [English](README.md) | 中文
 
-让 Claude Code 把读代码、排查、写实现、代码 review 全部派给 Codex，自己只负责跟用户对话、写任务书、判断结果。
+让 Claude Code 把读代码、排查、写实现、代码 review 派给执行器 —— Codex、qodercli，或任何会说 ACP 的 agent，自己只负责跟用户对话、写任务书、判断结果。
 
-适合的场景：你同时有 Claude Code 和 Codex（ChatGPT 订阅），Claude 的额度或上下文比 Codex 更紧张，想让 Claude 少读文件、少写代码，把这些活交给 Codex 做。
+适合的场景：你有 Claude Code 和至少一个执行器（Codex 的 ChatGPT 订阅、qodercli，或别的 ACP agent），想让 Claude 少读文件、少写代码，把上下文和输出留给判断和取舍。
 
 ## 做了什么
 
@@ -13,7 +13,7 @@
 | 文件 | 作用 |
 |---|---|
 | `skills/code-director/SKILL.md` | 给 Claude 主线程的工作规则：什么活派出去、任务书怎么写、并行怎么派、review 循环怎么跑 |
-| `skills/code-director/scripts/codex-worker.sh` | 全部派单逻辑：按 MODE 选 Codex 命令、加上给 Codex 的调度者说明、通过插件的 `codex-companion.mjs` 启动、等待、收集；`dispatch` 一次调用启动一个任务，`follow` 阻塞跟随一个任务的事件流直到主会话需要出手，`events` 给监视器输出任务事件 |
+| `skills/code-director/scripts/dispatch.sh` | 全部派单逻辑：按 MODE 选执行器和命令、加上给执行器的调度者说明、通过插件的 `codex-companion.mjs` 启动、等待、收集；`dispatch` 一次调用启动一个任务，`follow` 阻塞跟随一个任务的事件流直到主会话需要出手，`events` 给监视器输出任务事件 |
 | `docs/claude-md-snippet.md` | 加进 `CLAUDE.md` 的路由规则，保证相关任务每次都走这条路 |
 
 工作流程：
@@ -28,8 +28,8 @@ sequenceDiagram
     U->>C: 描述需求
     C->>C: 加载 code-director，写任务书
     par 并行派发，每路一次 Bash 调用
-        C->>X: codex-worker.sh dispatch（MODE: implement）
-        C->>X: codex-worker.sh dispatch（MODE: investigate）
+        C->>X: dispatch.sh dispatch（MODE: implement）
+        C->>X: dispatch.sh dispatch（MODE: investigate）
     end
     Note over P: 面板画出每个任务，并为每个活跃仓库挂一个 events Monitor
     X-->>P: job.completed（或 question.opened、director.notified、job.failed）
@@ -135,9 +135,9 @@ Codex 的上下文窗口很大，一个线程会记住它读过的所有代码�
 
 - 每次 task 类结果都带回一行 `THREAD: <id>`。
 - 同一个问题之后的所有派发（继续调查、追问、按调查结果实现、修 review 问题）都用 `MODE: continue`，头部带上这个 `THREAD:`。
-- codex-worker 会核对请求的线程和插件即将续的线程是否一致，不一致就报 `THREAD_MISMATCH`，不会悄悄续到错的线程上。
+- dispatch.sh 会核对请求的线程和插件即将续的线程是否一致，不一致就报 `THREAD_MISMATCH`，不会悄悄续到错的线程上。
 
-插件支持 `task --thread <id>` 时（见 [openai/codex-plugin-cc#719](https://github.com/openai/codex-plugin-cc/pull/719)），codex-worker 精确续到指定线程，多个问题可以随意交错。旧版插件只能续当前 Claude 会话在这个仓库里最近一个跑完的 task 线程，codex-worker 会退回候选校验，Claude 也会避免在两次 `continue` 之间往这个仓库派其他 task 类任务。
+插件支持 `task --thread <id>` 时（见 [openai/codex-plugin-cc#719](https://github.com/openai/codex-plugin-cc/pull/719)），dispatch.sh 精确续到指定线程，多个问题可以随意交错。旧版插件只能续当前 Claude 会话在这个仓库里最近一个跑完的 task 线程，dispatch.sh 会退回候选校验，Claude 也会避免在两次 `continue` 之间往这个仓库派其他 task 类任务。
 
 ### 看进度
 
@@ -147,21 +147,21 @@ Codex 在跑的时候，执行 `/codex:status` 能看到本仓库正在跑和最
 
 使用支持实时控制的插件版本时，`/codex:message <job-id> <补充指令>` 会向当前轮追加消息，不必等整轮结束。加 `--interrupt` 会取消当前轮，再由原任务在同一线程执行新指令；已有改动不会自动回滚，也不会改变原任务的写权限。返回的 Git 状态包含原有改动，不能全部归因于 Codex。
 
-自动纠偏时运行 `bash ~/.claude/skills/code-director/scripts/codex-worker.sh message <job-id> <prompt-file> --cwd <repo> [--interrupt]`：成功只输出 `MESSAGED job=<id>`；失败输出 `MESSAGE_FAILED job=<id> <reason>` 并以非零退出码结束；插件不支持时输出 `MESSAGE_UNSUPPORTED:`，退出码为 2。现在没有转发 agent，主会话的每条自动纠偏都直接走这条 worker 命令。当前 turn 必须停止时加 `--interrupt`；可以等到 Codex 下一次模型请求时则不加。
+自动纠偏时运行 `bash ~/.claude/skills/code-director/scripts/dispatch.sh message <job-id> <prompt-file> --cwd <repo> [--interrupt]`：成功只输出 `MESSAGED job=<id>`；失败输出 `MESSAGE_FAILED job=<id> <reason>` 并以非零退出码结束；插件不支持时输出 `MESSAGE_UNSUPPORTED:`，退出码为 2。现在没有转发 agent，主会话的每条自动纠偏都直接走这条 worker 命令。当前 turn 必须停止时加 `--interrupt`；可以等到 Codex 下一次模型请求时则不加。
 
 同一问题的新一轮通过另一份带 `MODE: continue` 和 `THREAD:` 的任务书再次执行 `dispatch`。有结构化反问挂起时，先通过 `answer` 回答；该 request 仍然打开时，worker 会拒绝普通消息。
 
 遇到结构化反问，主会话会收到任务面板报来的 `question.opened` 行（监视器路径下则是监视器的一条事件），底层 Codex 仍在等待。同一个 request 只会作为 `QUESTION` 上报一次，而且只在它仍然挂起时上报；已回答的 request 不再重复上报，仍未回答却再次出现的 request 改报 `QUESTION_PENDING`，提示主会话先查状态而不是重答一遍。主会话以 status 中的问题 ID 为键写入回答 JSON，例如 `{"<question-id>":{"answers":["..."]}}`，再执行 `/codex:answer <job-id> --request-id <id> --answers-file <绝对路径>`。默认等待回答 10 分钟，超时会中断并报告。
 
-从 Bash 回答时，用 `codex-worker.sh answer <job-id> <request-id> <answers-file> --cwd <repo>`。脚本发送前核对待回答请求、准确的问题 ID 和非空回答，发送后再次检查状态；成功输出 `ANSWERED job=<id> request=<id>`，失败输出 `ANSWER_FAILED` 和原因并以退出码 1 结束。`--cwd` 可放在 `answer` 后任意位置，缺省为当前目录；回答文件的相对路径按该目录解析。
+从 Bash 回答时，用 `dispatch.sh answer <job-id> <request-id> <answers-file> --cwd <repo>`。脚本发送前核对待回答请求、准确的问题 ID 和非空回答，发送后再次检查状态；成功输出 `ANSWERED job=<id> request=<id>`，失败输出 `ANSWER_FAILED` 和原因并以退出码 1 结束。`--cwd` 可放在 `answer` 后任意位置，缺省为当前目录；回答文件的相对路径按该目录解析。
 
-**没有任何东西在等任务。** 主会话把任务书写成文件，对它跑 `codex-worker.sh dispatch` 就继续做别的，这条命令几秒返回，带回任务 ID 和线程。插件的任务面板盯着本会话派出的每个任务，画出 Codex 的实时轨迹，并为每个有活跃任务的仓库自动挂一个 `events` Monitor。它的后台通知能在当前 turn 中报告完成、提问、通知、失败，以及 15 分钟无进展的 `STALLED`。仓库有 Monitor 覆盖时，面板不会再为同一个事件提交第二条提示。`/codex:tasks` 打开面板并在任务之间切换。`codex-worker.sh follow <job-id>` 仍然保留，用于脚本、headless 场景，以及主会话确实想阻塞等待的时候。
+**没有任何东西在等任务。** 主会话把任务书写成文件，对它跑 `dispatch.sh dispatch` 就继续做别的，这条命令几秒返回，带回任务 ID 和线程。插件的任务面板盯着本会话派出的每个任务，画出 Codex 的实时轨迹，并为每个有活跃任务的仓库自动挂一个 `events` Monitor。它的后台通知能在当前 turn 中报告完成、提问、通知、失败，以及 15 分钟无进展的 `STALLED`。仓库有 Monitor 覆盖时，面板不会再为同一个事件提交第二条提示。`/codex:tasks` 打开面板并在任务之间切换。`dispatch.sh follow <job-id>` 仍然保留，用于脚本、headless 场景，以及主会话确实想阻塞等待的时候。
 
-宿主会在 30 分钟后结束自动 Monitor；只要还有活跃任务，面板会重新挂一个。review 派发以脱离进程方式启动，不会立即返回任务 ID，但面板会按 Claude session 扫描任务文件并显示它；Monitor 负责可靠送达带任务 ID 的终态。没有面板时（SDK、headless 或 hooks 未加载），需要在派单前自行挂 `codex-worker.sh events --cwd <仓库>`。手动事件流每 2 分钟重复 `QUESTION_PENDING`，15 分钟无进展时发 `STALLED`，连续一小时没有活跃任务后以 `IDLE_EXIT` 退出。`events` 和 `follow` 收到未知参数时会列出支持项并以非零状态退出。
+宿主会在 30 分钟后结束自动 Monitor；只要还有活跃任务，面板会重新挂一个。review 派发以脱离进程方式启动，不会立即返回任务 ID，但面板会按 Claude session 扫描任务文件并显示它；Monitor 负责可靠送达带任务 ID 的终态。没有面板时（SDK、headless 或 hooks 未加载），需要在派单前自行挂 `dispatch.sh events --cwd <仓库>`。手动事件流每 2 分钟重复 `QUESTION_PENDING`，15 分钟无进展时发 `STALLED`，连续一小时没有活跃任务后以 `IDLE_EXIT` 退出。`events` 和 `follow` 收到未知参数时会列出支持项并以非零状态退出。
 
 Codex 知道自己是被谁启动的。`investigate` 和 `implement` 两种模式下，worker 脚本会在任务书前面加一段固定说明：你是由调度代理启动的，不是人类；`request_user_input` 的提问由调度代理回答；同一工作区可能还有其他 Codex 任务在跑（名单来自主会话派单时的 `SIBLINGS:` 头），不要自行协调，有事告诉调度代理。插件支持 `notify_director` 工具时，Codex 还可以在不停下来的情况下给调度代理发一句话，以 `NOTIFIED` 事件送达，任务继续跑；写这句话时若有结构化反问挂起，该行会带上 `pending_request=<id>`，提示主会话先去回答而不是发消息。Codex 任务之间不直接对话，全部由主会话中转。
 
-选哪条 Codex 命令、review 的兜底、给 Codex 的说明都在 `skills/code-director/scripts/codex-worker.sh` 里（`dispatch` 等于 `launch` 加 `collect`），脚本本身可以用 `bash -n` 和桩 companion 测试。
+选哪条 Codex 命令、review 的兜底、给 Codex 的说明都在 `skills/code-director/scripts/dispatch.sh` 里（`dispatch` 等于 `launch` 加 `collect`），脚本本身可以用 `bash -n` 和桩 companion 测试。
 
 `status <job-id>` 可以查看待消费消息、问题、通知和中断状态。消息被接受不代表模型已经执行；原生“下一轮排队”与这里的中途纠偏不同。本次插件修改不会自动更新已安装副本；更新插件后重开 Claude 会话，使新 broker 生效。
 
@@ -175,7 +175,7 @@ Codex 知道自己是被谁启动的。`investigate` 和 `implement` 两种模�
 
 **后台启动、用事件代替等待。** task 类任务使用插件原生后台任务，`dispatch` 最多检查启动状态 10 秒，任务进入 running 且已有线程 ID，或任务已结束时提前返回。检查期间失败的任务返回 `STATUS: failed` 和一行 `ERROR:`；后续完成、结构化反问和通知经插件的任务面板回到主会话。review 以脱离进程的方式启动，由事件监视器报告。
 
-**判断逻辑写进 shell，不靠模型自觉。** review 类任务的分支模式 / 工作区模式 / 兜底三选一，写成了固定脚本，Claude 把任务书原样交给 `codex-worker.sh dispatch`，别的什么都不填。
+**判断逻辑写进 shell，不靠模型自觉。** review 类任务的分支模式 / 工作区模式 / 兜底三选一，写成了固定脚本，Claude 把任务书原样交给 `dispatch.sh dispatch`，别的什么都不填。
 
 **简单任务不委托。** Claude 三次工具调用以内、不需要理解陌生代码就能做完的事（查一个值、一次 grep、已知位置改几行、跑一条命令），直接自己做；派一次 Codex 要写任务书、还要等至少一分钟。
 
