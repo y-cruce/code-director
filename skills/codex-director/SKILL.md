@@ -5,7 +5,7 @@ description: A way of working where Codex is the default executor and Claude onl
 
 # Codex director mode
 
-Premise: Codex quota is effectively unlimited. The scarce resource is the Claude main thread's context and output. Therefore:
+Premise: the scarce resource is the Claude main thread's context and output. Therefore:
 
 - **Do not read files to understand code.** To learn "where is X handled" or "why does this happen", write a brief and dispatch it to Codex. Let Codex read and report back. (Trivial lookups are the exception; see "What not to delegate".)
 - **Do not write large implementations yourself.** Specify what is needed, let Codex write it, and review.
