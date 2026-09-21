@@ -153,16 +153,18 @@ Everything reaches a running job through the worker, in a Bash call of your own:
 
 | Intent | Channel |
 |---|---|
-| Stop or redirect Codex now | `dispatch.sh message <job-id> <prompt-file> --cwd <repo> --interrupt` |
-| Correct an ACP agent (qoder) at all | The same, with `--interrupt`: an ACP executor reports `midTurnSteer: false`, so a plain `message` is always refused |
-| A correction that can wait | The same without `--interrupt`; it lands at Codex's next model request |
+| Stop the current approach now, on either executor | `dispatch.sh message <job-id> <prompt-file> --cwd <repo> --interrupt` |
+| A correction that can wait for this round to end, on either executor | The same with `--queue`: the message is delivered as the next turn once the current one finishes, and the agent keeps the work it was doing |
+| A correction Codex should read without stopping | The same with no flag; it lands at Codex's next model request. An ACP agent (qoder) reports `midTurnSteer: false` and refuses a plain message -- use `--queue` there |
 | End the job now | `cancel <job-id>` on the selected companion |
 | Answer a structured question | `answer` with the request id and exact question ids |
 | Start a new round on the same problem | Dispatch `MODE: continue` with `THREAD:` |
 
 A correction goes in a file, not inline: write it with the Write tool and pass the path. Answer a pending structured question before sending an ordinary message — while one is open the message is refused, and the refusal names the request.
 
-For direct Bash delivery, use `bash ~/.claude/skills/code-director/scripts/dispatch.sh message <job-id> <prompt-file> --cwd <repo> [--interrupt]`. It prints only `MESSAGED job=<id>` on success, or `MESSAGE_FAILED job=<id> <reason>` on failure; unsupported plugins return `MESSAGE_UNSUPPORTED:` and exit 2. Keep the job ID with its repository and thread. Success means accepted for the next model request, not that the instruction has already been followed. The slash command `/codex:message <job-id> <text>` remains user-facing shorthand. Use the worker for automatic `message` and `answer` calls; `status` and `result` still use the selected companion with `--cwd <repo>`. Do not invoke these commands as skills.
+For direct Bash delivery, use `bash ~/.claude/skills/code-director/scripts/dispatch.sh message <job-id> <prompt-file> --cwd <repo> [--interrupt|--queue]` (the two flags are two different intents; passing both is refused). It prints only `MESSAGED job=<id>` on success, or `MESSAGE_FAILED job=<id> <reason>` on failure; unsupported plugins return `MESSAGE_UNSUPPORTED:` and exit 2. Keep the job ID with its repository and thread. Success means accepted for the next model request, not that the instruction has already been followed. The slash command `/codex:message <job-id> <text>` remains user-facing shorthand. Use the worker for automatic `message` and `answer` calls; `status` and `result` still use the selected companion with `--cwd <repo>`. Do not invoke these commands as skills.
+
+`--queue` is the one to reach for first: the agent finishes what it is doing, and the correction becomes the next turn in the same job and thread. Only one message waits at a time -- a second `--queue` while one is pending is refused rather than replacing it -- and a turn that ends failed, cancelled, or interrupted delivers nothing, saying so in the job's events rather than dropping the message quietly.
 
 Use `/codex:message <job-id> --interrupt <text>` when the current approach must stop. It cancels the turn and continues the same job and thread with the new instruction, retaining its original write permission. Report the returned partial changes; interruption does not undo files. Do not use this to escalate a read-only task's permissions.
 

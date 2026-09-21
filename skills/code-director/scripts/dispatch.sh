@@ -6,8 +6,10 @@
 #                                          block and print the job's event stream until something the director must act on
 #                                          (DONE/FAILED/QUESTION/QUESTION_PENDING/NOTIFIED/STALLED/TIMEOUT)
 #   dispatch.sh events --cwd <repo>    stream job events (one line each) for a Monitor; needs a plugin with `events`
-#   dispatch.sh message <job-id> <prompt-file> [--cwd <repo>] [--interrupt]
+#   dispatch.sh message <job-id> <prompt-file> [--cwd <repo>] [--interrupt|--queue]
 #                                          forward a correction; print MESSAGED or MESSAGE_FAILED
+#                                          no flag = add it to the running turn (Codex only); --queue = deliver as the
+#                                          next turn once this one ends; --interrupt = cancel this turn and run it now
 #   dispatch.sh answer <job-id> <request-id> <answers-file> [--cwd <repo>]
 #                                          deliver answers to a structured question
 #   dispatch.sh companion              print the selected codex-companion.mjs path
@@ -356,24 +358,28 @@ do_follow() {
 }
 
 do_message() {
-  local CC cwd="$PWD" job="${1:-unknown}" args=() interrupt=()
+  local CC cwd="$PWD" job="${1:-unknown}" args=() mode=()
   while [ "$#" -gt 0 ]; do
     case "$1" in
       --cwd) [ "$#" -ge 2 ] || { echo "MESSAGE_FAILED job=$job usage: --cwd <repo>"; return 1; }; cwd="$2"; shift 2 ;;
-      --interrupt) interrupt=(--interrupt); shift ;;
+      --interrupt|--queue)
+        if [ "${#mode[@]}" -gt 0 ]; then
+          echo "MESSAGE_FAILED job=$job --interrupt and --queue are two different intents; pass one"; return 1
+        fi
+        mode=("$1"); shift ;;
       *) args+=("$1"); shift ;;
     esac
   done
   job="${args[0]:-unknown}"
   if [ "${#args[@]}" -ne 2 ]; then
-    echo "MESSAGE_FAILED job=$job usage: dispatch.sh message <job-id> <prompt-file> [--cwd <repo>] [--interrupt]"; return 1
+    echo "MESSAGE_FAILED job=$job usage: dispatch.sh message <job-id> <prompt-file> [--cwd <repo>] [--interrupt|--queue]"; return 1
   fi
   CC=$(select_companion)
   if [ -z "$CC" ] || ! grep -q 'case "message":' "$CC" 2>/dev/null; then
     echo "MESSAGE_UNSUPPORTED: the installed plugin has no message subcommand; install a plugin version that has it"
     return 2
   fi
-  node - "$CC" "$cwd" "${args[@]}" ${interrupt[@]+"${interrupt[@]}"} <<'NODE'
+  node - "$CC" "$cwd" "${args[@]}" ${mode[@]+"${mode[@]}"} <<'NODE'
 const path = require("node:path");
 const { execFileSync } = require("node:child_process");
 const [cc, cwd, job, file, ...flags] = process.argv.slice(2);
