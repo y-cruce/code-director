@@ -379,11 +379,18 @@ const { execFileSync } = require("node:child_process");
 const [cc, cwd, job, file, ...flags] = process.argv.slice(2);
 try {
   execFileSync(process.execPath, [cc, "message", job, "--prompt-file", path.resolve(cwd, file), "--cwd", cwd, ...flags],
-    { encoding: "utf8", stdio: ["ignore", "pipe", "pipe"] });
+    // The default 1 MiB buffer is smaller than a result carrying a turn's
+    // partial changes, and an overflow does not just lose the reply: Node kills
+    // the companion, so an interrupt already sent is reported as a failure.
+    { encoding: "utf8", stdio: ["ignore", "pipe", "pipe"], maxBuffer: 64 * 1024 * 1024 });
   console.log(`MESSAGED job=${job}`);
 } catch (error) {
   const detail = String(error.stderr || error.message).trim().split(/\r?\n/)[0];
-  console.log(`MESSAGE_FAILED job=${job} ${detail}`);
+  // A failed `--interrupt` does not mean nothing happened: the cancel may have
+  // reached the agent and only the reply been lost. Saying "failed" alone reads
+  // as "the task is untouched", which is how a running task gets abandoned.
+  const note = flags.includes("--interrupt") ? " (the turn may already have been cancelled; check status)" : "";
+  console.log(`MESSAGE_FAILED job=${job} ${detail}${note}`);
   process.exit(1);
 }
 NODE
@@ -409,7 +416,8 @@ const [cc, cwd, job, request, file] = process.argv.slice(2);
 const prefix = `ANSWER_FAILED job=${job} request=${request}`;
 try {
   if (!cc) throw new Error("no codex-companion.mjs found under ~/.claude/plugins/cache");
-  const run = (...args) => execFileSync(process.execPath, [cc, ...args, "--cwd", cwd], { encoding: "utf8", stdio: ["ignore", "pipe", "pipe"] });
+  const run = (...args) => execFileSync(process.execPath, [cc, ...args, "--cwd", cwd],
+    { encoding: "utf8", stdio: ["ignore", "pipe", "pipe"], maxBuffer: 64 * 1024 * 1024 });
   const pending = () => {
     const live = JSON.parse(run("status", job, "--json")).job.live;
     if (live?.unavailable) throw new Error(live.unavailable);
