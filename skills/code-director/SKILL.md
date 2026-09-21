@@ -69,16 +69,21 @@ EFFORT: high
 
 ### Executors
 
-`EXECUTOR` picks the agent that runs a task-class mode (`investigate`, `implement`, `continue`). **Choose it by how hard the task is**, the same judgement the effort table below asks for:
+`EXECUTOR` and `MODEL` pick the agent that runs a task-class mode (`investigate`, `implement`, `continue`). Three agents are available, and they divide by **what the task asks of the agent**:
 
-| Task | Executor |
-|---|---|
-| Low to medium difficulty: the work lives in one or two files, the change follows a plan that is already settled, or the question is answered by reading a known area. Implementation counts, not just reading. | `EXECUTOR: qoder` on its default `dfmodel` |
-| Hard: find a root cause, reason across many files, design the change as well as write it, or an edit whose blast radius you cannot bound | leave `EXECUTOR` out and Codex runs it |
-| Many independent tasks at once | `EXECUTOR: qoder`, which is cheap enough to run in bulk |
-| `review` and `adversarial-review` | Codex only; the worker refuses another executor |
+| Agent | Headers | What it is for |
+|---|---|---|
+| Qoder `dfmodel` | `EXECUTOR: qoder` | Fast, cheap, and smart enough to implement on its own. Work whose shape is already settled: a scoped change, a question answered by reading a known area, a decision already made and now to be applied. Cheap and fast enough that many run at once. |
+| Qoder `ultimate` | `EXECUTOR: qoder` plus `MODEL: ultimate` | Opus 5. Work where deciding what to build is the task: weighing approaches, settling an architecture, then carrying that design into the code. One thread can do the design and the implementation. |
+| Codex | leave `EXECUTOR` out | Judging work that exists: `review` and `adversarial-review` (Codex only, the worker refuses another executor), a second opinion on a plan or a report, and digging out a root cause nobody has explained yet. |
 
-`dfmodel` is cheap and fast, so a medium task costs little there and several can run at once. Codex has no quota worth managing, so it takes everything that needs the stronger reasoning. When a task sits on the line, send it to Codex: a wrong answer costs more than the credits saved. `MODEL: ultimate` puts a hard task on Qoder's strong model, which is worth it only when you have a reason to keep that thread on Qoder.
+The usual shape of a problem: `ultimate` settles the approach, several `dfmodel` jobs carry out its pieces in parallel, Codex reviews what comes back. For a single task, three questions decide:
+
+- **Is the approach already decided?** If yes, `dfmodel`. If deciding it is the work, `ultimate`.
+- **Does the task produce something or judge something?** Judging goes to Codex.
+- **Are there many independent tasks?** Send them all to `dfmodel` at once.
+
+Keep `ultimate` for the one or two jobs where the design is the work; bulk belongs on `dfmodel`, which costs little and answers quickly. A thread belongs to the executor that created it, so when a Codex root-cause round turns into a design, write what it found into a fresh brief for `ultimate` rather than continuing that thread.
 
 The user's own instruction wins over this table, and `CODEX_DIRECTOR_EXECUTOR` sets the default when the header is absent.
 
@@ -92,8 +97,8 @@ The user's own instruction wins over this table, and `CODEX_DIRECTOR_EXECUTOR` s
 
 | MODEL | When |
 |---|---|
-| `dfmodel` | Qoder's default. Cheap and fast, so it is the one to run many tasks on at once. |
-| `ultimate` | The strong model. Use it for a hard or subtle problem, not for bulk work. |
+| `dfmodel` | Qoder's default. Fast, cheap, and capable on its own; the one to run many tasks on at once. |
+| `ultimate` | Opus 5. Approach, architecture, and turning either into code. Keep bulk work off it. |
 
 Leave `MODEL` out and Qoder runs `dfmodel`. Qoder runs in its `yolo` permission mode by default, matching the standing policy that a dispatched task never stalls on a prompt no human is watching; `EXECUTOR_MODE:` overrides it.
 
@@ -108,7 +113,7 @@ What you lose when the executor is not Codex:
 
 ### MODE and effort
 
-Codex runs on `gpt-6-astra` by default (set in `~/.codex/config.toml`, together with a default effort of `high`). On this model, **medium or high is enough for nearly every task**; do not set `MODEL` unless the user asks for a specific model.
+Codex runs on `gpt-6-astra` by default (set in `~/.codex/config.toml`, together with a default effort of `high`). On this model, **medium or high is enough for nearly every task**; do not set `MODEL` on a Codex task unless the user asks for a specific model. On Qoder, `MODEL` is the `dfmodel` / `ultimate` choice above.
 
 | Goal | MODE | EFFORT | Notes |
 |---|---|---|---|

@@ -121,7 +121,9 @@ EFFORT: high
 | `qoder` | qodercli over ACP; the binary is found on PATH, then `~/.qoder/entry/qoder`, or `CODEX_DIRECTOR_QODER_COMMAND` | `EXECUTOR_MODE` (a Qoder session mode, e.g. `yolo`) |
 | `acp` | Any other agent speaking the Agent Client Protocol on stdio | `EXECUTOR_COMMAND` (required), `EXECUTOR_ARGS` (a JSON array), `EXECUTOR_MODE` |
 
-`MODEL` names the executor's own model. On Qoder, `dfmodel` is the default — cheap and fast, the one to run many tasks on at once — and `ultimate` is the strong model for a hard problem. Qoder runs in its `yolo` permission mode unless `EXECUTOR_MODE` says otherwise, so a dispatched task never stalls on a prompt no human is watching.
+`MODEL` names the executor's own model. On Qoder, `dfmodel` is the default: fast, cheap, and capable enough to implement on its own, so it is the one to run many tasks on at once. `MODEL: ultimate` is Opus 5, for the job where deciding the approach or the architecture is the work, and for carrying that design into the code. Qoder runs in its `yolo` permission mode unless `EXECUTOR_MODE` says otherwise, so a dispatched task never stalls on a prompt no human is watching.
+
+The division the skill recommends: `ultimate` settles the approach, `dfmodel` implements its pieces in parallel, Codex judges the result. Anything that reviews, challenges, or has to explain a root cause goes to Codex; anything whose shape is already settled goes to `dfmodel`.
 
 `review` and `adversarial-review` stay Codex-only; the worker refuses them with another executor. A non-Codex agent has no `request_user_input` or `notify_director`, so the director note leaves both out for it.
 
