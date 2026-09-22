@@ -74,16 +74,17 @@ EFFORT: high
 | Agent | Headers | What it is for |
 |---|---|---|
 | Qoder `dfmodel` | `EXECUTOR: qoder` | Fast, cheap, and smart enough to implement on its own. Work whose shape is already settled: a scoped change, a question answered by reading a known area, a decision already made and now to be applied. Cheap and fast enough that many run at once. |
-| Qoder `ultimate` | `EXECUTOR: qoder` plus `MODEL: ultimate` | Opus 5. Work where deciding what to build is the task: weighing approaches, settling an architecture, then carrying that design into the code. One thread can do the design and the implementation. |
+| Qoder `performance` | `EXECUTOR: qoder` plus `MODEL: performance` | GPT-5.6-sol, 1M context. The middle rung: work with real substance that still has a known shape -- a change across several files, a question whose answer spans a subsystem, a design small enough to settle in one pass. |
+| Qoder `ultimate` | `EXECUTOR: qoder` plus `MODEL: ultimate` | Opus 5. The hard ones only: weighing approaches nobody has settled, an architecture to decide, a problem the rungs below already failed at. One thread can do the design and the implementation. |
 | Codex | leave `EXECUTOR` out | Judging work that exists: `review` and `adversarial-review` (Codex only, the worker refuses another executor), a second opinion on a plan or a report, and digging out a root cause nobody has explained yet. |
 
-The usual shape of a problem: `ultimate` settles the approach, several `dfmodel` jobs carry out its pieces in parallel, Codex reviews what comes back. For a single task, three questions decide:
+The usual shape of a problem: `ultimate` settles the approach, `performance` carries the pieces with substance to them, several `dfmodel` jobs take the rest in parallel, Codex reviews what comes back. For a single task, three questions decide:
 
-- **Is the approach already decided?** If yes, `dfmodel`. If deciding it is the work, `ultimate`.
 - **Does the task produce something or judge something?** Judging goes to Codex.
+- **How hard is it?** Shape already settled, `dfmodel`. Real substance but a known shape, `performance`. Deciding what to build, or a problem the rungs below could not crack, `ultimate`.
 - **Are there many independent tasks?** Send them all to `dfmodel` at once.
 
-Keep `ultimate` for the one or two jobs where the design is the work; bulk belongs on `dfmodel`, which costs little and answers quickly. A thread belongs to the executor that created it, so when a Codex root-cause round turns into a design, write what it found into a fresh brief for `ultimate` rather than continuing that thread.
+Keep `ultimate` for the one or two genuinely hard jobs; reach for `performance` when `dfmodel` looks thin, and leave bulk on `dfmodel`, which costs little and answers quickly. A thread belongs to the executor that created it, so when a Codex root-cause round turns into a design, write what it found into a fresh brief for `ultimate` rather than continuing that thread.
 
 The user's own instruction wins over this table, and `CODEX_DIRECTOR_EXECUTOR` sets the default when the header is absent.
 
@@ -93,14 +94,15 @@ The user's own instruction wins over this table, and `CODEX_DIRECTOR_EXECUTOR` s
 | `qoder` | qodercli over ACP; the binary is found on PATH, then `~/.qoder/entry/qoder`, or `CODEX_DIRECTOR_QODER_COMMAND` | `EXECUTOR_MODE` (a Qoder session mode, e.g. `yolo`) |
 | `acp` | Any other agent speaking the Agent Client Protocol on stdio | `EXECUTOR_COMMAND` (or `$CODEX_COMPANION_ACP_COMMAND`; one of them is required), `EXECUTOR_ARGS` (a JSON array), `EXECUTOR_MODE` |
 
-`MODEL:` names the executor's own model. On Qoder two are worth knowing:
+`MODEL:` names the executor's own model. On Qoder three are worth knowing, in rising order of what they cost and what they can carry:
 
 | MODEL | When |
 |---|---|
 | `dfmodel` | Qoder's default. Fast, cheap, and capable on its own; the one to run many tasks on at once. |
-| `ultimate` | Opus 5. Approach, architecture, and turning either into code. Keep bulk work off it. |
+| `performance` | GPT-5.6-sol, 1M context. Medium-complexity work: more than `dfmodel` should carry, short of what needs `ultimate`. |
+| `ultimate` | Opus 5. High complexity only -- the approach, the architecture, the problem nothing below it cracked. Keep everything else off it. |
 
-Leave `MODEL` out and Qoder runs `dfmodel`. Qoder runs in its `yolo` permission mode by default, matching the standing policy that a dispatched task never stalls on a prompt no human is watching; `EXECUTOR_MODE:` overrides it.
+Leave `MODEL` out and a new Qoder task runs `dfmodel`, because the dispatcher names it: Qoder reuses whichever model ran last, so one `ultimate` job would otherwise put every later headerless dispatch on Opus 5. `MODE: continue` is the exception and keeps the model its thread was created on. Qoder runs in its `yolo` permission mode by default, matching the standing policy that a dispatched task never stalls on a prompt no human is watching; `EXECUTOR_MODE:` overrides it.
 
 What you lose when the executor is not Codex:
 
@@ -113,7 +115,7 @@ What you lose when the executor is not Codex:
 
 ### MODE and effort
 
-Codex runs on `gpt-6-astra` by default (set in `~/.codex/config.toml`, together with a default effort of `high`). On this model, **medium or high is enough for nearly every task**; do not set `MODEL` on a Codex task unless the user asks for a specific model. On Qoder, `MODEL` is the `dfmodel` / `ultimate` choice above.
+Codex runs on `gpt-6-astra` by default (set in `~/.codex/config.toml`, together with a default effort of `high`). On this model, **medium or high is enough for nearly every task**; do not set `MODEL` on a Codex task unless the user asks for a specific model. On Qoder, `MODEL` is the `dfmodel` / `performance` / `ultimate` choice above.
 
 | Goal | MODE | EFFORT | Notes |
 |---|---|---|---|
