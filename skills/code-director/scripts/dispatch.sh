@@ -7,7 +7,7 @@
 #                                          (DONE/FAILED/QUESTION/QUESTION_PENDING/NOTIFIED/STALLED/TIMEOUT)
 #   dispatch.sh events --cwd <repo>    stream job events (one line each) for a Monitor; needs a plugin with `events`
 #   dispatch.sh message <job-id> <prompt-file> [--cwd <repo>] [--interrupt|--queue]
-#                                          forward a correction; print MESSAGED or MESSAGE_FAILED
+#                                          forward a correction; print MESSAGED (with queued=<job> for --queue) or MESSAGE_FAILED
 #                                          no flag = add it to the running turn (Codex only); --queue = deliver as the
 #                                          next turn once this one ends; --interrupt = cancel this turn and run it now
 #   dispatch.sh answer <job-id> <request-id> <answers-file> [--cwd <repo>]
@@ -391,12 +391,17 @@ const path = require("node:path");
 const { execFileSync } = require("node:child_process");
 const [cc, cwd, job, file, ...flags] = process.argv.slice(2);
 try {
-  execFileSync(process.execPath, [cc, "message", job, "--prompt-file", path.resolve(cwd, file), "--cwd", cwd, ...flags],
+  const reply = execFileSync(process.execPath, [cc, "message", job, "--prompt-file", path.resolve(cwd, file), "--cwd", cwd, ...flags],
     // The default 1 MiB buffer is smaller than a result carrying a turn's
     // partial changes, and an overflow does not just lose the reply: Node kills
     // the companion, so an interrupt already sent is reported as a failure.
     { encoding: "utf8", stdio: ["ignore", "pipe", "pipe"], maxBuffer: 64 * 1024 * 1024 });
-  console.log(`MESSAGED job=${job}`);
+  // A queued message runs its turn as a job of its own, and that id is the only
+  // handle on it: dropped here, the director first heard of the turn when a DONE
+  // arrived for an id it had never been given.
+  let queued = null;
+  try { queued = JSON.parse(reply).queuedJobId ?? null; } catch {}
+  console.log(`MESSAGED job=${job}${queued ? ` queued=${queued}` : ""}`);
 } catch (error) {
   const detail = String(error.stderr || error.message).trim().split(/\r?\n/)[0];
   // A failed `--interrupt` does not mean nothing happened: the cancel may have
