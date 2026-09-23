@@ -155,7 +155,7 @@ Codex 在跑的时候，执行 `/codex:status` 能看到本仓库正在跑和最
 
 从 Bash 回答时，用 `dispatch.sh answer <job-id> <request-id> <answers-file> --cwd <repo>`。脚本发送前核对待回答请求、准确的问题 ID 和非空回答，发送后再次检查状态；成功输出 `ANSWERED job=<id> request=<id>`，失败输出 `ANSWER_FAILED` 和原因并以退出码 1 结束。`--cwd` 可放在 `answer` 后任意位置，缺省为当前目录；回答文件的相对路径按该目录解析。
 
-**没有任何东西在等任务。** 主会话把任务书写成文件，对它跑 `dispatch.sh dispatch` 就继续做别的，这条命令几秒返回，带回任务 ID 和线程。插件的任务面板盯着本会话派出的每个任务，画出 Codex 的实时轨迹，并为每个有活跃任务的仓库自动挂一个 `events` Monitor。它的后台通知能在当前 turn 中报告完成、提问、通知、失败，以及 15 分钟无进展的 `STALLED`。仓库有 Monitor 覆盖时，面板不会再为同一个事件提交第二条提示。`/codex:tasks` 打开面板并在任务之间切换。`dispatch.sh follow <job-id>` 仍然保留，用于脚本、headless 场景，以及主会话确实想阻塞等待的时候。
+**没有任何东西在等任务。** 主会话把任务书写成文件，对它跑 `dispatch.sh dispatch` 就继续做别的，这条命令几秒返回，带回任务 ID 和线程。插件的任务面板盯着本会话派出的每个任务，画出 Codex 的实时轨迹，并为每个有活跃任务的仓库自动挂一个 `events` Monitor。它的后台通知能在当前 turn 中报告完成、提问、通知、失败，以及 15 分钟无进展的 `STALLED`。仓库有 Monitor 覆盖时，面板不会再为同一个事件提交第二条提示。`/codex:tasks` 打开或关闭面板，`/codex:tasks <编号或名称>` 在任务之间切换。`dispatch.sh follow <job-id>` 仍然保留，用于脚本、headless 场景，以及主会话确实想阻塞等待的时候。
 
 宿主会在 30 分钟后结束自动 Monitor；只要还有活跃任务，面板会重新挂一个。review 派发以脱离进程方式启动，不会立即返回任务 ID，但面板会按 Claude session 扫描任务文件并显示它；Monitor 负责可靠送达带任务 ID 的终态。没有面板时（SDK、headless 或 hooks 未加载），需要在派单前自行挂 `dispatch.sh events --cwd <仓库>`。手动事件流每 2 分钟重复 `QUESTION_PENDING`，15 分钟无进展时发 `STALLED`，连续一小时没有活跃任务后以 `IDLE_EXIT` 退出。`events` 和 `follow` 收到未知参数时会列出支持项并以非零状态退出。
 
