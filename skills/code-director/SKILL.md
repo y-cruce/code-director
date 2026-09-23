@@ -9,7 +9,8 @@ Premise: the scarce resource is the Claude main thread's context and output. The
 
 - **Do not read files to understand code.** To learn "where is X handled" or "why does this happen", write a brief and dispatch it to Codex. Let Codex read and report back. (Trivial lookups are the exception; see "What not to delegate".)
 - **Do not write large implementations yourself.** Specify what is needed, let Codex write it, and review.
-- **Dispatching several routes is fine.** Run investigation and implementation in parallel for the same problem, or have Codex propose two approaches and pick one.
+- **Dispatch whole tasks.** One task goes from reading the code to a verified result; do not split a problem into explore, plan and implement stages handed to different jobs. Run several jobs in parallel only when they cover independent parts, or when Codex should try two approaches so you can pick one.
+- **Dispatch work whose result you can check.** Every brief carries acceptance criteria. An implementation comes back as a diff and test output; an investigation comes back with `file:line` or command output behind each conclusion. A summary with nothing to check it against is not a basis for a decision.
 - **You do four things only**: talk to the user, break the task down and write briefs, judge Codex's results, and make the calls.
 
 ## Dispatching
@@ -67,26 +68,13 @@ EFFORT: high
 <brief>
 ```
 
-### Executors
+### Executors and models
 
-`EXECUTOR` and `MODEL` pick the agent that runs a task-class mode (`investigate`, `implement`, `continue`). Three agents are available, and they divide by **what the task asks of the agent**:
+One executor carries every task: Codex on `gpt-6-sol` (set in `~/.codex/config.toml`). Implementation, investigation, root cause, review and second opinions all go there, so a brief names neither `EXECUTOR` nor `MODEL`. For a review or a second opinion, a fresh thread is what keeps the judgment independent of the work it judges.
 
-| Agent | Headers | What it is for |
-|---|---|---|
-| Qoder `dfmodel` | `EXECUTOR: qoder` | Fast, cheap, and smart enough to implement on its own. Work whose shape is already settled: a scoped change, a question answered by reading a known area, a decision already made and now to be applied. Cheap and fast enough that many run at once. |
-| Qoder `performance` | `EXECUTOR: qoder` plus `MODEL: performance` | GPT-5.6-sol, 1M context. The middle rung: work with real substance that still has a known shape -- a change across several files, a question whose answer spans a subsystem, a design small enough to settle in one pass. |
-| Qoder `ultimate` | `EXECUTOR: qoder` plus `MODEL: ultimate` | Opus 5. The hard ones only: weighing approaches nobody has settled, an architecture to decide, a problem the rungs below already failed at. One thread can do the design and the implementation. |
-| Codex | leave `EXECUTOR` out | Judging work that exists: `review` and `adversarial-review` (Codex only, the worker refuses another executor), a second opinion on a plan or a report, and digging out a root cause nobody has explained yet. |
+The one other choice is `MODEL: luna`, for bulk mechanical work: a rename across many files, the same edit applied in dozens of places, boilerplate. The test is whether tests or the diff alone can confirm the result. If they can, `luna` (`gpt-6-luna`, run at `max` effort unless `EFFORT:` says otherwise) is enough and costs next to nothing; if judgment is needed to tell whether it is right, leave `MODEL` out.
 
-The usual shape of a problem: `ultimate` settles the approach, `performance` carries the pieces with substance to them, several `dfmodel` jobs take the rest in parallel, Codex reviews what comes back. For a single task, three questions decide:
-
-- **Does the task produce something or judge something?** Judging goes to Codex.
-- **How hard is it?** Shape already settled, `dfmodel`. Real substance but a known shape, `performance`. Deciding what to build, or a problem the rungs below could not crack, `ultimate`.
-- **Are there many independent tasks?** Send them all to `dfmodel` at once.
-
-Keep `ultimate` for the one or two genuinely hard jobs; reach for `performance` when `dfmodel` looks thin, and leave bulk on `dfmodel`, which costs little and answers quickly. A thread belongs to the executor that created it, so when a Codex root-cause round turns into a design, write what it found into a fresh brief for `ultimate` rather than continuing that thread.
-
-The user's own instruction wins over this table, and `CODEX_DIRECTOR_EXECUTOR` sets the default when the header is absent.
+An explicit `EXECUTOR:` or `MODEL:` header is passed through as written; write one only when the user asks for a specific executor or model.
 
 | EXECUTOR | Agent | Extra headers |
 |---|---|---|
@@ -94,15 +82,7 @@ The user's own instruction wins over this table, and `CODEX_DIRECTOR_EXECUTOR` s
 | `qoder` | qodercli over ACP; the binary is found on PATH, then `~/.qoder/entry/qoder`, or `CODEX_DIRECTOR_QODER_COMMAND` | `EXECUTOR_MODE` (a Qoder session mode, e.g. `yolo`) |
 | `acp` | Any other agent speaking the Agent Client Protocol on stdio | `EXECUTOR_COMMAND` (or `$CODEX_COMPANION_ACP_COMMAND`; one of them is required), `EXECUTOR_ARGS` (a JSON array), `EXECUTOR_MODE` |
 
-`MODEL:` names the executor's own model. On Qoder three are worth knowing, in rising order of what they cost and what they can carry:
-
-| MODEL | When |
-|---|---|
-| `dfmodel` | Qoder's default. Fast, cheap, and capable on its own; the one to run many tasks on at once. |
-| `performance` | GPT-5.6-sol, 1M context. Medium-complexity work: more than `dfmodel` should carry, short of what needs `ultimate`. |
-| `ultimate` | Opus 5. High complexity only -- the approach, the architecture, the problem nothing below it cracked. Keep everything else off it. |
-
-Leave `MODEL` out and a new Qoder task runs `dfmodel`, because the dispatcher names it: Qoder reuses whichever model ran last, so one `ultimate` job would otherwise put every later headerless dispatch on Opus 5. `MODE: continue` is the exception and keeps the model its thread was created on. Qoder runs in its `yolo` permission mode by default, matching the standing policy that a dispatched task never stalls on a prompt no human is watching; `EXECUTOR_MODE:` overrides it.
+On Qoder, `MODEL:` names Qoder's own model (`dfmodel`, `performance`, `ultimate`). The dispatcher always names one for a new task because Qoder otherwise reuses whichever model ran last; `MODE: continue` keeps the model its thread was created on. Qoder runs in its `yolo` permission mode by default, matching the standing policy that a dispatched task never stalls on a prompt no human is watching; `EXECUTOR_MODE:` overrides it.
 
 What you lose when the executor is not Codex:
 
@@ -115,22 +95,17 @@ What you lose when the executor is not Codex:
 
 ### MODE and effort
 
-Codex runs on `gpt-6-astra` by default (set in `~/.codex/config.toml`, together with a default effort of `high`). On this model, **medium or high is enough for nearly every task**; do not set `MODEL` on a Codex task unless the user asks for a specific model. On Qoder, `MODEL` is the `dfmodel` / `performance` / `ultimate` choice above.
+Every task-class dispatch runs at `high` unless the header says otherwise, `continue` included. That is enough for nearly every task.
 
-| Goal | MODE | EFFORT | Notes |
-|---|---|---|---|
-| Scan the codebase to answer a question, locate entry points, small well-scoped edits | investigate / implement | medium | Fast; the default for anything narrow |
-| Trace call chains, understand a module, implement a change from requirements | investigate / implement | high | The default for anything that spans several files |
-| Find the root cause of a bug or odd behavior | investigate | high | Start here; escalate to xhigh only if the high round comes back inconclusive |
-| Any follow-up on a problem that already has a thread | continue | unset | Put `THREAD: <id>` in the header; writes files only with `WRITE: yes` |
-| Standard code review | review | ignored | Prefer providing `BASE: <ref>`, see below; a review never reads `EFFORT`, and the untracked fallback runs at `high` |
-| Challenge the approach and assumptions | adversarial-review | unset | Body is the focus text; prefer providing `BASE: <ref>` |
+| Goal | MODE | Notes |
+|---|---|---|
+| Answer a question, locate code, find the root cause of a bug | investigate | Read-only intent goes in the brief |
+| Implement a change from requirements | implement | |
+| Any follow-up on a problem that already has a thread | continue | Put `THREAD: <id>` in the header; writes files only with `WRITE: yes` |
+| Standard code review | review | Prefer providing `BASE: <ref>`, see below; a review never reads `EFFORT`, and the untracked fallback runs at `high` |
+| Challenge the approach and assumptions | adversarial-review | Body is the focus text; prefer providing `BASE: <ref>` |
 
-Picking the effort:
-
-- **medium**: the answer lives in one or two files, or the edit is a few lines at a known location and you only delegate because the code is unfamiliar.
-- **high**: everything else. Multi-file investigation, implementation from requirements, first root-cause pass.
-- **xhigh**: reserved. Use it only when a `high` round already ran and came back without a clear answer, or the problem is known to be non-deterministic (concurrency, ordering, intermittent failures) and needs long reasoning over many interacting paths. Do not start a task at xhigh; when escalating, prefer `continue` in the same thread with `EFFORT: xhigh` in the header so Codex keeps what it already read.
+`EFFORT: xhigh` is for a problem that a `high` round already came back unclear on, or one known to be non-deterministic (concurrency, ordering, intermittent failures). Escalate with `continue` in the same thread so Codex keeps what it already read.
 
 ### Review modes and untracked files
 
@@ -227,7 +202,7 @@ path/to/b.py  -- suspect
 ## Standard pipeline (code changes)
 
 1. Write the brief. If the requirement is ambiguous, ask the user first; do not let Codex guess.
-2. Dispatch `implement`. If the affected area is unclear, dispatch `investigate` first and then `continue` in that thread with the implementation (rather than a separate parallel route, so the thread keeps what it learned).
+2. Dispatch `implement`, with the acceptance tests or commands in the brief. When the affected area is unclear, the same task finds it first; a separate `investigate` is for when you need its answer before you can decide what to build, and the implementation then follows as `continue` in that thread.
 3. When the implementation returns, **decide whether a review is worth it**. Review is not a fixed step; it is your call, made on the returned result. Weigh how much could go wrong if the change is subtly wrong against what a review costs (a brief, a wait, and one more round of context), and dispatch `adversarial-review` only when the risk justifies it (intent of the change and your main concerns as the body; prefer `BASE:`, since a fallback review is task-class and would become the most recent thread). When you skip it, go straight to wrap-up and tell the user in one line that you skipped the review and why.
 4. If you reviewed: for high or medium findings, dispatch `continue` with `THREAD:` and `WRITE: yes` so Codex fixes them in the same thread, then judge again whether another review round is needed. At most three rounds; step in yourself if it is still not clean.
 5. Wrap up: run the tests or verification command, spot-check one or two `file:line` claims from Codex, then report to the user.
@@ -252,5 +227,7 @@ When the context is long and early information starts getting lost, run `/codex:
 You read Codex's text with the companion's `result <job-id>`; it comes back unchanged.
 
 - Spot-check one or two `file:line` references before trusting them; Codex is also wrong sometimes.
+- Before acting on a conclusion that decides what happens next (a root cause, "this message was lost", "that turn is running"), check the raw data it rests on yourself: the file, the job state, the command output. Do not act on a report's reading of intermediate state.
+- A conclusion with no evidence attached goes back as a `continue` asking for the evidence; do not build on it.
 - On `STATUS: failed` or `CODEX_FAILED`: report the most useful log lines to the user. Do not take over and redo the whole task yourself.
 - Do not auto-apply every review finding; decide first which ones are real.

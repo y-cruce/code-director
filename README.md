@@ -113,7 +113,7 @@ EFFORT: high
 
 ### Executors
 
-`EXECUTOR` picks which agent runs a task-class mode (`investigate`, `implement`, `continue`). It defaults to `codex`, so nothing changes unless you set it.
+`EXECUTOR` picks which agent runs a task-class mode (`investigate`, `implement`, `continue`). It defaults to `$CODEX_DIRECTOR_EXECUTOR`, else `codex`. The skill sends every task to Codex on the model in your Codex config (`gpt-6-sol`), and uses `MODEL: luna` for bulk mechanical work whose result tests or the diff can confirm. Set `CODEX_DIRECTOR_EXECUTOR=qoder` to move everything to Qoder when Codex quota runs out; briefs stay the same.
 
 | EXECUTOR | Agent | Extra headers |
 |---|---|---|
@@ -121,15 +121,13 @@ EFFORT: high
 | `qoder` | qodercli over ACP; the binary is found on PATH, then `~/.qoder/entry/qoder`, or `CODEX_DIRECTOR_QODER_COMMAND` | `EXECUTOR_MODE` (a Qoder session mode, e.g. `yolo`) |
 | `acp` | Any other agent speaking the Agent Client Protocol on stdio | `EXECUTOR_COMMAND` (required), `EXECUTOR_ARGS` (a JSON array), `EXECUTOR_MODE` |
 
-`MODEL` names the executor's own model. On Qoder, `dfmodel` is the default: fast, cheap, and capable enough to implement on its own, so it is the one to run many tasks on at once. `MODEL: performance` is GPT-5.6-sol with a 1M context, the middle rung for medium-complexity work that is more than `dfmodel` should carry. `MODEL: ultimate` is Opus 5, kept for high complexity: deciding the approach or the architecture, and carrying that design into the code. Qoder runs in its `yolo` permission mode unless `EXECUTOR_MODE` says otherwise, so a dispatched task never stalls on a prompt no human is watching.
-
-The division the skill recommends: `ultimate` settles the approach, `performance` takes the pieces with substance to them, `dfmodel` implements the rest in parallel, Codex judges the result. Anything that reviews, challenges, or has to explain a root cause goes to Codex; anything whose shape is already settled goes to `dfmodel`.
+`MODEL` names the executor's own model; `MODEL: luna` is the one name that works on both: `gpt-6-luna` at `max` effort on Codex, `dfmodel` on Qoder. A new Qoder task without `MODEL` runs `performance`, because Qoder otherwise reuses whichever model ran last. Qoder runs in its `yolo` permission mode unless `EXECUTOR_MODE` says otherwise, so a dispatched task never stalls on a prompt no human is watching.
 
 `review` and `adversarial-review` stay Codex-only; the worker refuses them with another executor. A non-Codex agent has no `request_user_input` or `notify_director`, so the director note leaves both out for it.
 
 Required header: `NAME` is a few words describing the task, truncated to 80 characters. It appears after `JOB:` in dispatch/collect output and, with a plugin supporting `task --label`, beside the job ID in status and events; older plugins print a note and launch without the label. Review commands carry the label as well.
 
-Optional headers: `EFFORT` (`medium` / `high` / `xhigh`, default high), `MODEL` (defaults to the model in your Codex config), `BASE` (base ref for review modes), `THREAD` (the Codex thread a `continue` must resume), `SIBLINGS` (one line naming other running Codex tasks, shown to Codex), `CWD` (repository to run in).
+Optional headers: `EFFORT` (`medium` / `high` / `xhigh`, default high, `continue` included), `MODEL` (defaults to the model in your Codex config), `BASE` (base ref for review modes), `THREAD` (the Codex thread a `continue` must resume), `SIBLINGS` (one line naming other running Codex tasks, shown to Codex), `CWD` (repository to run in).
 
 ### Thread continuity
 

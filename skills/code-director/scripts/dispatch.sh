@@ -22,7 +22,7 @@
 # SIBLINGS, CWD, SANDBOX (full = no sandbox, the default for every task; network = workspace-write plus network
 # access; default = the plugin's own read-only / workspace-write choice),
 # EXECUTOR (codex | qoder | acp) with EXECUTOR_COMMAND, EXECUTOR_ARGS (JSON array), EXECUTOR_MODE, EXECUTOR_EFFORT and MODEL for a
-# non-Codex agent; task-class modes only. Without the header the default is $CODEX_DIRECTOR_EXECUTOR, else codex,
+# non-Codex agent (MODEL: luna maps to gpt-6-luna on Codex and dfmodel on qoder); task-class modes only. Without the header the default is $CODEX_DIRECTOR_EXECUTOR, else codex,
 # and qoder runs in its `yolo` permission mode unless EXECUTOR_MODE or $CODEX_DIRECTOR_EXECUTOR_MODE says otherwise.
 set -uo pipefail
 
@@ -121,6 +121,11 @@ do_launch() {
   # tools it has, and a default coming from the environment would otherwise
   # reach an ACP agent describing Codex's.
   EXECUTOR="${EXECUTOR:-${CODEX_DIRECTOR_EXECUTOR:-codex}}"
+  # `MODEL: luna` is the bulk tier and names no executor, so a brief keeps
+  # working when CODEX_DIRECTOR_EXECUTOR switches the default to qoder.
+  if [ "$MODEL" = luna ]; then
+    case "$EXECUTOR" in codex) MODEL=gpt-6-luna; EFFORT="${EFFORT:-max}" ;; qoder) MODEL=dfmodel ;; esac
+  fi
 
   local CMD=() FOCUS CAND
   case "$MODE" in
@@ -143,7 +148,7 @@ do_launch() {
           CMD=(node "$CC" task --cwd "$CWD" --resume-last --prompt-file "$WORK/prompt.md")
         fi
       fi
-      [ -n "$EFFORT" ] && CMD+=(--effort "$EFFORT")
+      CMD+=(--effort "$(task_effort high)")
       [ "$WRITE" = yes ] && CMD+=(--write) ;;
     review|adversarial-review)
       FOCUS=""
@@ -204,11 +209,11 @@ do_launch() {
         CMD+=(--executor acp --executor-command "$EXECUTOR_COMMAND" --executor-args '["--acp"]')
         # Qoder remembers the model each session ran on and reuses it for the
         # next one, so a single `MODEL: ultimate` job would quietly put every
-        # later dispatch that names no model on Opus 5. Name the cheap default
-        # the skill documents instead of inheriting whatever ran last. A
+        # later dispatch that names no model on Opus 5. Name the default the
+        # skill documents instead of inheriting whatever ran last. A
         # continue is left alone: its thread was created on some model, and
         # switching it mid-thread is not what "no MODEL header" asks for.
-        if [ "$MODE" != continue ] && [ -z "$MODEL" ]; then MODEL=dfmodel; fi
+        if [ "$MODE" != continue ] && [ -z "$MODEL" ]; then MODEL=performance; fi
         # Same standing policy as Codex's danger-full-access: a dispatched task
         # must not stall on a permission prompt no human is watching.
         EXECUTOR_MODE="${EXECUTOR_MODE:-${CODEX_DIRECTOR_EXECUTOR_MODE:-yolo}}" ;;

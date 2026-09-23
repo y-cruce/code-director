@@ -113,7 +113,7 @@ EFFORT: high
 
 ### 执行器
 
-`EXECUTOR` 决定谁来跑 task 类模式（`investigate`、`implement`、`continue`），默认 `codex`，不写就和以前一样。
+`EXECUTOR` 决定谁来跑 task 类模式（`investigate`、`implement`、`continue`），默认取 `$CODEX_DIRECTOR_EXECUTOR`，没设就是 `codex`。技能把所有任务都派给 Codex，用你 Codex 配置里的模型（`gpt-6-sol`）；批量的机械改动、结果靠测试或 diff 就能核对的，写 `MODEL: luna`。Codex 额度不够时设 `CODEX_DIRECTOR_EXECUTOR=qoder`，整体切到 Qoder，任务书不用改。
 
 | EXECUTOR | 执行者 | 额外头部 |
 |---|---|---|
@@ -121,15 +121,13 @@ EFFORT: high
 | `qoder` | 走 ACP 的 qodercli；二进制按 PATH、`~/.qoder/entry/qoder`、`CODEX_DIRECTOR_QODER_COMMAND` 的顺序找 | `EXECUTOR_MODE`（Qoder 的会话模式，例如 `yolo`） |
 | `acp` | 任何在 stdio 上说 Agent Client Protocol 的 agent | `EXECUTOR_COMMAND`（必填）、`EXECUTOR_ARGS`（JSON 数组）、`EXECUTOR_MODE` |
 
-`MODEL` 指的是执行器自己的模型。Qoder 上 `dfmodel` 是默认值：快、便宜、智能程度足够自己写实现，适合大量并行。`MODEL: performance` 是 GPT-5.6-sol，1M 上下文，中间一档，接中等复杂度、`dfmodel` 扛不住的活。`MODEL: ultimate` 是 Opus 5，只留给高复杂、高难度的任务——比方案、定架构，以及把这个设计落地成代码。Qoder 默认跑在 `yolo` 权限模式，除非 `EXECUTOR_MODE` 另行指定——派出去的任务背后没人盯着，不能卡在权限确认上。
-
-技能推荐的分工：`ultimate` 定方案，`performance` 接有份量的那几块，`dfmodel` 并行把其余实现出来，Codex 评判结果。凡是 review、挑刺、要解释根因的交给 Codex；形态已经定下来的交给 `dfmodel`。
+`MODEL` 指的是执行器自己的模型；`MODEL: luna` 两边通用：Codex 上是 `gpt-6-luna`（推理强度 `max`），Qoder 上是 `dfmodel`。新的 Qoder 任务不写 `MODEL` 时跑 `performance`，因为 Qoder 默认沿用上一次用过的模型。Qoder 默认跑在 `yolo` 权限模式，除非 `EXECUTOR_MODE` 另行指定——派出去的任务背后没人盯着，不能卡在权限确认上。
 
 `review` 和 `adversarial-review` 仍是 Codex 独有，配别的执行器会被拒绝。非 Codex 的 agent 没有 `request_user_input` 和 `notify_director`，任务书说明里不会提这两个工具。
 
 必填头部：`NAME` 用几个词说明任务内容，超过 80 个字符会截断。名称显示在 dispatch/collect 输出的 `JOB:` 后；插件支持 `task --label` 时，也会显示在 status 和事件的任务 ID 旁，旧插件会输出提示并照常启动。review 命令同样传名称。
 
-可选头部：`EFFORT`（`medium` / `high` / `xhigh`，缺省 high）、`MODEL`（缺省用你 Codex 配置里的模型）、`BASE`（review 类的基准分支）、`THREAD`（`continue` 必须续上的 Codex 线程）、`SIBLINGS`（一行写明其他正在跑的 Codex 任务，会给 Codex 看）、`CWD`（在哪个仓库里跑）。
+可选头部：`EFFORT`（`medium` / `high` / `xhigh`，缺省 high，`continue` 也一样）、`MODEL`（缺省用你 Codex 配置里的模型）、`BASE`（review 类的基准分支）、`THREAD`（`continue` 必须续上的 Codex 线程）、`SIBLINGS`（一行写明其他正在跑的 Codex 任务，会给 Codex 看）、`CWD`（在哪个仓库里跑）。
 
 ### 线程连续性
 
