@@ -141,7 +141,7 @@ With a plugin that supports `task --thread <id>` ([openai/codex-plugin-cc#719](h
 
 ### Checking progress
 
-While Codex is running, `/codex:status` lists the running and recently finished jobs in the current repo with their current phase. `/codex:result <job-id>` shows the full output of one job. The tasks pane follows the end of a growing trace while you stay at the bottom and stops following when you scroll up; a finished task remains in the pane for fifteen minutes.
+While Codex is running, `/codex:status` lists the running and recently finished jobs in the current repo with their current phase. `/codex:result <job-id>` shows the full output of one job. The tasks pane follows the end of a growing trace while you stay at the bottom and stops following when you scroll up; a finished task remains in the pane for fifteen minutes. `/codex:tasks refresh` rebuilds the pane from disk and `/codex:tasks forget <n | name>` hides one row; the director does the same from Bash with `dispatch.sh pane refresh` and `dispatch.sh pane forget <n | name | task id>`, and `dispatch.sh pane list` shows each row's pane status beside its status on disk. None of these touch job files.
 
 ## Design decisions
 

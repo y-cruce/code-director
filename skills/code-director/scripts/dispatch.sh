@@ -13,6 +13,9 @@
 #   dispatch.sh answer <job-id> <request-id> <answers-file> [--cwd <repo>]
 #                                          deliver answers to a structured question
 #   dispatch.sh companion              print the selected codex-companion.mjs path
+#   dispatch.sh pane [list|refresh|forget <n|name|task id>]
+#                                          ask this session's tasks pane for its rows (pane vs disk status), make it
+#                                          rebuild from disk, or hide one row; job files are never touched
 # Building blocks of dispatch, also usable on their own:
 #   dispatch.sh launch <input-file>    parse the header lines, start Codex, print WORK=... JOB=... STARTED
 #   dispatch.sh collect <WORK>         print the STATUS / JOB / NAME / THREAD lines
@@ -486,5 +489,6 @@ case "${1:-}" in
   follow)    shift; do_follow "$@" ;;
   message)   shift; do_message "$@" ;;
   answer)    shift; do_answer "$@" ;;
-  *) echo "usage: dispatch.sh dispatch [input-file] | launch <input-file> | collect <WORK> | companion | events --cwd <repo> | follow <job-id> --cwd <repo> [--after <cursor>] | message <job-id> <prompt-file> [--cwd <repo>] [--interrupt] | answer <job-id> <request-id> <answers-file> [--cwd <repo>]"; exit 1 ;;
+  pane)      shift; CC=$(select_companion) || exit 1; node "$CC" pane "$@" ;;
+  *) echo "usage: dispatch.sh dispatch [input-file] | launch <input-file> | collect <WORK> | companion | events --cwd <repo> | follow <job-id> --cwd <repo> [--after <cursor>] | message <job-id> <prompt-file> [--cwd <repo>] [--interrupt] | answer <job-id> <request-id> <answers-file> [--cwd <repo>] | pane [list|refresh|forget <n|name|task id>]"; exit 1 ;;
 esac

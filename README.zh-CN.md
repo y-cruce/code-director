@@ -141,7 +141,7 @@ Codex 的上下文窗口很大，一个线程会记住它读过的所有代码�
 
 ### 看进度
 
-Codex 在跑的时候，执行 `/codex:status` 能看到本仓库正在跑和最近完成的任务及当前阶段。`/codex:result <job-id>` 看某次的完整输出。只要视口停在底部，任务面板会跟随不断增长的轨迹；向上滚动后会停止跟随。任务结束后会在面板保留 15 分钟。
+Codex 在跑的时候，执行 `/codex:status` 能看到本仓库正在跑和最近完成的任务及当前阶段。`/codex:result <job-id>` 看某次的完整输出。只要视口停在底部，任务面板会跟随不断增长的轨迹；向上滚动后会停止跟随。任务结束后会在面板保留 15 分钟。`/codex:tasks refresh` 让面板从磁盘重建，`/codex:tasks forget <序号|名称>` 去掉其中一行；主会话在 Bash 里用 `dispatch.sh pane refresh`、`dispatch.sh pane forget <序号|名称|任务 ID>` 做同样的事，`dispatch.sh pane list` 列出每一行在面板上和磁盘上的状态。这些操作都不改任务文件。
 
 ### 运行中纠偏与回答
 
