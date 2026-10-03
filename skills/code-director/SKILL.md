@@ -9,7 +9,8 @@ Premise: the scarce resource is the Claude main thread's context and output. The
 
 - **Do not read files to understand code.** To learn "where is X handled" or "why does this happen", write a brief and dispatch it to Codex. Let Codex read and report back. (Trivial lookups are the exception; see "What not to delegate".)
 - **Do not write large implementations yourself.** Specify what is needed, let Codex write it, and review.
-- **Dispatch whole tasks.** One task goes from reading the code to a verified result; do not split a problem into explore, plan and implement stages handed to different jobs. Run several jobs in parallel only when they cover independent parts, or when Codex should try two approaches so you can pick one.
+- **Dispatch whole tasks.** One task goes from reading the code to a verified result; do not split a problem into explore, plan and implement stages handed to different jobs.
+- **Run independent work in parallel.** A job takes minutes to come back, and running jobs one after another leaves that time idle. Whenever parts of the work do not need each other's results, dispatch them together, and keep working while they run.
 - **Dispatch work whose result you can check.** Every brief carries acceptance criteria. An implementation comes back as a diff and test output; an investigation comes back with `file:line` or command output behind each conclusion. A summary with nothing to check it against is not a basis for a decision.
 - **You do four things only**: talk to the user, break the task down and write briefs, judge Codex's results, and make the calls.
 
