@@ -70,7 +70,7 @@ cd code-director
 ./install.sh
 ```
 
-脚本把 skill 和 worker 脚本复制到 `~/.claude/`，并删除旧版本留下的转发 agent。然后按 `docs/claude-md-snippet.md` 把路由规则加到 `~/.claude/CLAUDE.md`，在 Claude Code 里执行 `/reload-plugins` 或重开会话。
+脚本把 `~/.claude/skills/code-director` 软链到这个 checkout，之后的修改和 `git pull` 不用重装就生效，并删除旧版本留下的转发 agent。checkout 不要移动或删除，否则软链会失效。然后按 `docs/claude-md-snippet.md` 把路由规则加到 `~/.claude/CLAUDE.md`，在 Claude Code 里执行 `/reload-plugins` 或重开会话。
 
 ## 使用
 

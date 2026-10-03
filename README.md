@@ -70,7 +70,7 @@ cd code-director
 ./install.sh
 ```
 
-The script copies the skill and worker script into `~/.claude/` and removes forwarding agents left by older versions. Then append the snippet from `docs/claude-md-snippet.md` to `~/.claude/CLAUDE.md` and run `/reload-plugins` in Claude Code, or start a new session.
+The script links `~/.claude/skills/code-director` to this checkout, so later edits and `git pull` take effect without reinstalling, and removes forwarding agents left by older versions. Keep the checkout where it is; moving or deleting it breaks the link. Then append the snippet from `docs/claude-md-snippet.md` to `~/.claude/CLAUDE.md` and run `/reload-plugins` in Claude Code, or start a new session.
 
 ## Usage
 
