@@ -20,7 +20,6 @@ All dispatch logic lives in `~/.claude/skills/code-director/scripts/dispatch.sh`
 ```
 MODE: investigate
 NAME: locate answer validation path
-EFFORT: high
 CWD: /abs/path/to/repo
 
 <brief>
@@ -65,7 +64,6 @@ Prompt format: a few header lines, a blank line, then the brief body. `NAME: <a 
 ```
 MODE: investigate
 NAME: <what this task does>
-EFFORT: high
 
 <brief>
 ```
@@ -97,17 +95,17 @@ What you lose when the executor is not Codex:
 
 ### MODE and effort
 
-Every task-class dispatch runs at `high` unless the header says otherwise, `continue` included. That is enough for nearly every task.
+dispatch.sh passes no effort unless the header sets `EFFORT:`. A new thread then runs at `model_reasoning_effort` from `~/.codex/config.toml`, and a `continue` keeps the level its thread last ran at. Leave `EFFORT` out for nearly every task.
 
 | Goal | MODE | Notes |
 |---|---|---|
 | Answer a question, locate code, find the root cause of a bug | investigate | Read-only intent goes in the brief |
 | Implement a change from requirements | implement | |
 | Any follow-up on a problem that already has a thread | continue | Put `THREAD: <id>` in the header; writes files only with `WRITE: yes` |
-| Standard code review | review | Prefer providing `BASE: <ref>`, see below; a review never reads `EFFORT`, and the untracked fallback runs at `high` |
+| Standard code review | review | Prefer providing `BASE: <ref>`, see below; a review never reads `EFFORT` |
 | Challenge the approach and assumptions | adversarial-review | Body is the focus text; prefer providing `BASE: <ref>` |
 
-`EFFORT: xhigh` is for a problem that a `high` round already came back unclear on, or one known to be non-deterministic (concurrency, ordering, intermittent failures). Escalate with `continue` in the same thread so Codex keeps what it already read.
+Set `EFFORT:` for a problem that a round at the configured level already came back unclear on, or one known to be non-deterministic (concurrency, ordering, intermittent failures). Escalate with `continue` in the same thread so Codex keeps what it already read; the thread stays at that level for later `continue` rounds.
 
 ### Review modes and untracked files
 

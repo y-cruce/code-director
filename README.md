@@ -91,7 +91,6 @@ What Claude hands to the worker script. A few header lines carry control paramet
 ```
 MODE: implement
 NAME: worker answer subcommand
-EFFORT: high
 
 ## Goal
 ...
@@ -127,7 +126,7 @@ EFFORT: high
 
 Required header: `NAME` is a few words describing the task, truncated to 80 characters. It appears after `JOB:` in dispatch/collect output and, with a plugin supporting `task --label`, beside the job ID in status and events; older plugins print a note and launch without the label. Review commands carry the label as well.
 
-Optional headers: `EFFORT` (`medium` / `high` / `xhigh`, default high, `continue` included), `MODEL` (defaults to the model in your Codex config), `BASE` (base ref for review modes), `THREAD` (the Codex thread a `continue` must resume), `SIBLINGS` (one line naming other running Codex tasks, shown to Codex), `CWD` (repository to run in).
+Optional headers: `EFFORT` (`medium` / `high` / `xhigh` / `max`; left out, a new task runs at `model_reasoning_effort` from your Codex config and a `continue` keeps its thread's last level), `MODEL` (defaults to the model in your Codex config), `BASE` (base ref for review modes), `THREAD` (the Codex thread a `continue` must resume), `SIBLINGS` (one line naming other running Codex tasks, shown to Codex), `CWD` (repository to run in).
 
 ### Thread continuity
 

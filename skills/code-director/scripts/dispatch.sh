@@ -95,10 +95,6 @@ EOF
 EOF
 }
 
-task_effort() {  # $1 default
-  printf '%s\n' "${EFFORT:-$1}"
-}
-
 do_launch() {
   local input="$1"
   # Every launch gets its own work directory: several dispatch files may sit in one
@@ -134,10 +130,10 @@ do_launch() {
   case "$MODE" in
     investigate)
       { director_note; cat "$WORK/brief.md"; } > "$WORK/prompt.md"
-      CMD=(node "$CC" task --cwd "$CWD" --prompt-file "$WORK/prompt.md" --effort "$(task_effort high)") ;;
+      CMD=(node "$CC" task --cwd "$CWD" --prompt-file "$WORK/prompt.md" ${EFFORT:+--effort "$EFFORT"}) ;;
     implement)
       { director_note; cat "$WORK/brief.md"; } > "$WORK/prompt.md"
-      CMD=(node "$CC" task --cwd "$CWD" --prompt-file "$WORK/prompt.md" --effort "$(task_effort high)" --write) ;;
+      CMD=(node "$CC" task --cwd "$CWD" --prompt-file "$WORK/prompt.md" ${EFFORT:+--effort "$EFFORT"} --write) ;;
     continue)
       cp "$WORK/brief.md" "$WORK/prompt.md"
       if [ -n "$THREAD" ] && grep -q '"thread"' "$CC"; then
@@ -151,7 +147,7 @@ do_launch() {
           CMD=(node "$CC" task --cwd "$CWD" --resume-last --prompt-file "$WORK/prompt.md")
         fi
       fi
-      CMD+=(--effort "$(task_effort high)")
+      [ -n "$EFFORT" ] && CMD+=(--effort "$EFFORT")
       [ "$WRITE" = yes ] && CMD+=(--write) ;;
     review|adversarial-review)
       FOCUS=""
@@ -170,7 +166,7 @@ do_launch() {
           echo; echo '---- Brief ----'; cat "$WORK/brief.md"
         } > "$WORK/prompt.md"
         echo 'NOTE: too many untracked files; fell back to a read-only task for this review' > "$WORK/note"
-        CMD=(node "$CC" task --cwd "$CWD" --prompt-file "$WORK/prompt.md" --effort high)
+        CMD=(node "$CC" task --cwd "$CWD" --prompt-file "$WORK/prompt.md")
       fi ;;
     *)
       echo "CODEX_FAILED: unknown MODE '${MODE}'"; exit 1 ;;
