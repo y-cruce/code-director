@@ -150,7 +150,7 @@ While Codex is running, `/codex:status` lists the running and recently finished 
 
 **Parallel writes use worktrees.** Only one `implement` runs per checkout at a time. To have Codex produce two approaches, give each route its own `git worktree` and pass it as `CWD:`, and Claude picks one.
 
-**Detached start, events instead of waits.** Task runs use native background jobs; `dispatch` checks startup for up to 10 seconds, returning early once the job is running with a thread ID or has finished. A job that fails during this check returns `STATUS: failed` with an `ERROR:` line; later completion, questions, and notes come back through the plugin's tasks pane. Reviews start as a detached process and are reported by an event monitor.
+**Detached start, events instead of waits.** Task runs use native background jobs; `dispatch` checks startup for up to 10 seconds, returning early once the job is running with a thread ID or has finished. A job that fails during this check, or a launch the companion rejects, returns `STATUS: failed` with an `ERROR:` line; later completion, questions, and notes come back through the plugin's tasks pane. Reviews start as a detached process and are reported by an event monitor.
 
 **Decision logic lives in shell, not in the model's judgment.** For review modes, the choice between branch mode, working-tree mode, and the fallback is a fixed script. Claude pastes the brief into `dispatch.sh dispatch` and fills in nothing else.
 

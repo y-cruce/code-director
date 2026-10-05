@@ -172,7 +172,7 @@ Codex 知道自己是被谁启动的。`investigate` 和 `implement` 两种模�
 
 **并行改文件用 worktree。** 同一个 checkout 里同时只跑一路 `implement`。要让 Codex 用两种方案各写一版，给每一路建一个 `git worktree` 并写进 `CWD:`，各改各的，Claude 最后挑。
 
-**后台启动、用事件代替等待。** task 类任务使用插件原生后台任务，`dispatch` 最多检查启动状态 10 秒，任务进入 running 且已有线程 ID，或任务已结束时提前返回。检查期间失败的任务返回 `STATUS: failed` 和一行 `ERROR:`；后续完成、结构化反问和通知经插件的任务面板回到主会话。review 以脱离进程的方式启动，由事件监视器报告。
+**后台启动、用事件代替等待。** task 类任务使用插件原生后台任务，`dispatch` 最多检查启动状态 10 秒，任务进入 running 且已有线程 ID，或任务已结束时提前返回。检查期间失败的任务，以及 companion 拒绝启动的派发，都返回 `STATUS: failed` 和一行 `ERROR:`；后续完成、结构化反问和通知经插件的任务面板回到主会话。review 以脱离进程的方式启动，由事件监视器报告。
 
 **判断逻辑写进 shell，不靠模型自觉。** review 类任务的分支模式 / 工作区模式 / 兜底三选一，写成了固定脚本，Claude 把任务书原样交给 `dispatch.sh dispatch`，别的什么都不填。
 

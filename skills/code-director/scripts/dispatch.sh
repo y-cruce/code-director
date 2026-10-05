@@ -276,7 +276,10 @@ do_launch() {
       python3 -c 'import json,sys; print(json.load(open(sys.argv[1]))["jobId"])' "$WORK/launch.json" > "$WORK/job"
       echo "JOB=$(cat "$WORK/job")"
     else
-      cat "$WORK/log"; exit 1
+      # The companion failed before handing back a job id; report it in the same lines as a failed collect.
+      echo "STATUS: failed"; echo "JOB: "; echo "NAME: $NAME"; echo "THREAD: "
+      echo "ERROR: $(grep -m1 . "$WORK/log" || echo "the companion exited without a message; see $WORK/log")"
+      exit 1
     fi
   else
     ( nohup "${CMD[@]}" > "$WORK/out.txt" 2> "$WORK/log" < /dev/null; echo $? > "$WORK/exit" ) > /dev/null 2>&1 < /dev/null & disown
