@@ -31,12 +31,16 @@ set -uo pipefail
 
 select_companion() {
   if [ -n "${CODEX_COMPANION:-}" ]; then printf '%s\n' "$CODEX_COMPANION"; return; fi
-  local cc f
-  cc=$(ls ~/.claude/plugins/cache/*/codex/*/scripts/codex-companion.mjs 2>/dev/null | sort -V | tail -1)
-  for f in $(ls ~/.claude/plugins/cache/*/codex/*/scripts/codex-companion.mjs 2>/dev/null | sort -V); do grep -q '"thread"' "$f" && cc="$f"; done
-  for f in $(ls ~/.claude/plugins/cache/*/codex/*/scripts/codex-companion.mjs 2>/dev/null | sort -V); do grep -q 'case "message":' "$f" && cc="$f"; done
-  for f in $(ls ~/.claude/plugins/cache/*/codex/*/scripts/codex-companion.mjs 2>/dev/null | sort -V); do grep -q 'case "events":' "$f" && cc="$f"; done
-  for f in $(ls ~/.claude/plugins/cache/*/codex/*/scripts/codex-companion.mjs 2>/dev/null | sort -V); do grep -q 'case "observe":' "$f" && cc="$f"; done
+  local cc="" f marker files
+  files=$(ls ~/.claude/plugins/cache/*/codex/*/scripts/codex-companion.mjs 2>/dev/null | sort -rV)
+  # The newest version with the newest subcommand wins. Checking newest first
+  # stops at one grep when the latest plugin is installed: the pane starts with
+  # `dispatch.sh companion` under a short timeout, and a grep per cached version
+  # per subcommand overran it on a busy machine.
+  for marker in 'case "observe":' 'case "events":' 'case "message":' '"thread"'; do
+    for f in $files; do grep -q "$marker" "$f" && { cc="$f"; break 2; }; done
+  done
+  cc="${cc:-$(printf '%s\n' "$files" | head -1)}"
   if [ -z "$cc" ]; then
     echo "COMPANION_NOT_FOUND: no codex-companion.mjs under ~/.claude/plugins/cache; install the Codex plugin or set CODEX_COMPANION" >&2
     return 1
