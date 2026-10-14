@@ -142,6 +142,8 @@ With a plugin that supports `task --thread <id>` ([openai/codex-plugin-cc#719](h
 
 While Codex is running, `/codex:status` lists the running and recently finished jobs in the current repo with their current phase. `/codex:result <job-id>` shows the full output of one job. The tasks pane follows the end of a growing trace while you stay at the bottom and stops following when you scroll up; a finished task remains in the pane for fifteen minutes. `/codex:tasks refresh` rebuilds the pane from disk and `/codex:tasks forget <n | name>` hides one row; the director does the same from Bash with `dispatch.sh pane refresh` and `dispatch.sh pane forget <n | name | task id>`, and `dispatch.sh pane list` shows each row's pane status beside its status on disk. None of these touch job files.
 
+With a plugin supporting these features and Claude Code 2.1.299 or later, pending questions, failures and completions use your notification channel. Both the task name and status are clickable; sessions without a drawing surface explain why the pane cannot be shown. In the target position of `/codex:tasks`, `/codex:tasks forget` or `/codex:message`, type part of a name or ID and press Tab to insert the matching ID. Message suggestions include only running tasks; use `/codex:answer` for pending questions.
+
 ## Design decisions
 
 **Codex output is never compressed.** Claude reads Codex's result with `result <job-id>`, unchanged. Claude's context is saved by the division of labor itself (Claude does not read files or write code), not by truncating or summarizing Codex's answer.
