@@ -173,7 +173,17 @@ For `investigate` and `implement`, dispatch.sh prepends a fixed note to your bri
 
 ### Isolate tasks that write files
 
-Only one `implement` per checkout at a time. To run parallel edits (for example, two approaches by Codex), give each route its own worktree (`git worktree add <path> <branch>`) and put that path in `CWD:`; compare afterwards and merge the one you pick. Read-only tasks need no isolation.
+Only one writer per checkout at a time, including the director. For parallel edits, the director creates one worktree per route before dispatch and puts its absolute path in `CWD:`. On macOS/APFS prefer the plugin's clone helper:
+
+```bash
+bash ~/.claude/skills/code-director/scripts/dispatch.sh worktree /abs/source-repo /abs/new-worktree worker/topic
+```
+
+This requires a plugin shipping `scripts/worktree.mjs`, plus Python 3 on macOS for native `clonefile`. With an older plugin, use `git worktree add -b worker/topic /abs/new-worktree <base-sha>` instead; never copy an existing `.git` file. The helper pins source HEAD, registers fresh Git metadata, and clones tracked files with copy-on-write where supported. Source edits and missing files are checked out from the pinned commit; untracked and ignored files, including installed dependencies and build outputs, are not copied. Keep the source stable during creation. Check the returned `cwd`, `branch`, `base`, `clonedFiles`, `copiedFiles` and `checkoutFiles`: ordinary copies and Git checkouts do not prove APFS savings. Repositories with submodules use ordinary `git worktree add`.
+
+Executors stay in their assigned directory. Before building, check symlinks and absolute paths; install dependencies there or use repository-supported immutable caches. Do not hard-link writable files or point several writers at the same dependency/output directory. Reuse an idle worktree when its branch and contents fit the next task. Read-only source investigations can share a repository using a pinned SHA; parallel tests that write files need their own worktree too.
+
+After judging the result and integrating the chosen commits, stop the task and its builds, preserve any required uncommitted or ignored files, then use `git worktree remove /abs/worktree`. Do not force-remove dirty trees or delete their branch automatically. APFS releases unreferenced blocks itself; pane expiry and `git worktree prune` do not remove a live directory. A thread remains tied to its original `CWD`, so retain that worktree while further `continue` rounds are needed.
 
 ## Brief template
 

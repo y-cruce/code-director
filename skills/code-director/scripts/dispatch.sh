@@ -13,6 +13,8 @@
 #   dispatch.sh answer <job-id> <request-id> <answers-file> [--cwd <repo>]
 #                                          deliver answers to a structured question
 #   dispatch.sh companion              print the selected codex-companion.mjs path
+#   dispatch.sh worktree <source-repo> <new-directory> <new-branch>
+#                                          register an independent worktree and clone tracked files where supported
 #   dispatch.sh pane [list|refresh|forget <n|name|task id>]
 #                                          ask this session's tasks pane for its rows (pane vs disk status), make it
 #                                          rebuild from disk, or hide one row; job files are never touched
@@ -94,6 +96,7 @@ EOF
   cat <<EOF
 - Other tasks started by the same director may be running in this workspace. Do not coordinate with them yourself; tell the director what they need to know in your final message.
 - Other tasks currently running: ${SIBLINGS:-none known}
+- Work only in the assigned CWD. The director owns worktree creation and cleanup. APFS clones have independent files but may retain symlinks or absolute paths into another checkout: check those before builds, keep outputs local, and never replace isolation with hard links or shared writable dependencies. Do not copy a worktree's .git file or delete another task's directory. Report the branch, commit and any remaining files the director must preserve when you finish.
 
 ---- Brief ----
 EOF
@@ -488,10 +491,14 @@ case "${1:-}" in
   launch)    [ "$#" -ge 2 ] || { echo "usage: dispatch.sh launch <input-file>"; exit 1; }; do_launch "$2" ;;
   collect)   [ "$#" -ge 2 ] || { echo "usage: dispatch.sh collect <WORK>"; exit 1; }; do_collect "$2" ;;
   companion) select_companion ;;
+  worktree)
+    shift; CC=$(select_companion) || exit 1
+    [ -f "$(dirname "$CC")/worktree.mjs" ] || { echo 'WORKTREE_UNSUPPORTED: update the plugin or point CODEX_COMPANION at a checkout with scripts/worktree.mjs'; exit 2; }
+    node "$(dirname "$CC")/worktree.mjs" "$@" ;;
   events)    shift; do_events "$@" ;;
   follow)    shift; do_follow "$@" ;;
   message)   shift; do_message "$@" ;;
   answer)    shift; do_answer "$@" ;;
   pane)      shift; CC=$(select_companion) || exit 1; node "$CC" pane "$@" ;;
-  *) echo "usage: dispatch.sh dispatch [input-file] | launch <input-file> | collect <WORK> | companion | events --cwd <repo> | follow <job-id> --cwd <repo> [--after <cursor>] | message <job-id> <prompt-file> [--cwd <repo>] [--interrupt] | answer <job-id> <request-id> <answers-file> [--cwd <repo>] | pane [list|refresh|forget <n|name|task id>]"; exit 1 ;;
+  *) echo "usage: dispatch.sh dispatch [input-file] | launch <input-file> | collect <WORK> | companion | worktree <source-repo> <new-directory> <new-branch> | events --cwd <repo> | follow <job-id> --cwd <repo> [--after <cursor>] | message <job-id> <prompt-file> [--cwd <repo>] [--interrupt] | answer <job-id> <request-id> <answers-file> [--cwd <repo>] | pane [list|refresh|forget <n|name|task id>]"; exit 1 ;;
 esac

@@ -140,7 +140,7 @@ With a plugin that supports `task --thread <id>` ([openai/codex-plugin-cc#719](h
 
 ### Checking progress
 
-While Codex is running, `/codex:status` lists the running and recently finished jobs in the current repo with their current phase. `/codex:result <job-id>` shows the full output of one job. The tasks pane follows the end of a growing trace while you stay at the bottom and stops following when you scroll up; a finished task remains in the pane for fifteen minutes. `/codex:tasks refresh` rebuilds the pane from disk and `/codex:tasks forget <n | name>` hides one row; the director does the same from Bash with `dispatch.sh pane refresh` and `dispatch.sh pane forget <n | name | task id>`, and `dispatch.sh pane list` shows each row's pane status beside its status on disk. None of these touch job files.
+While Codex is running, `/codex:status` lists the running and recently finished jobs in the current repo with their current phase. `/codex:result <job-id>` shows the full output of one job. The tasks pane follows the end of a growing trace while you stay at the bottom and stops following when you scroll up; a finished task remains in the pane for three minutes. `/codex:tasks refresh` rebuilds the pane from disk and `/codex:tasks forget <n | name>` hides one row; the director does the same from Bash with `dispatch.sh pane refresh` and `dispatch.sh pane forget <n | name | task id>`, and `dispatch.sh pane list` shows each row's pane status beside its status on disk. None of these touch job files.
 
 With a plugin supporting these features and Claude Code 2.1.299 or later, pending questions, failures and completions use your notification channel. Both the task name and status are clickable; sessions without a drawing surface explain why the pane cannot be shown. In the target position of `/codex:tasks`, `/codex:tasks forget` or `/codex:message`, type part of a name or ID and press Tab to insert the matching ID. Message suggestions include only running tasks; use `/codex:answer` for pending questions.
 
@@ -150,7 +150,15 @@ With a plugin supporting these features and Claude Code 2.1.299 or later, pendin
 
 **One thread per problem, review only when it earns its cost.** For code changes, `implement` runs first (or `investigate` then `continue` with the implementation when the affected area is unclear). When the implementation comes back, Claude judges whether an `adversarial-review` is worth its cost for this particular change and says so either way. Findings go back to the same thread via `continue` to fix, up to three rounds.
 
-**Parallel writes use worktrees.** Only one `implement` runs per checkout at a time. To have Codex produce two approaches, give each route its own `git worktree` and pass it as `CWD:`, and Claude picks one.
+**Parallel writes use worktrees with copy-on-write files.** The director creates one directory per writer, including itself, and passes its absolute path as `CWD:`. With a plugin shipping `scripts/worktree.mjs`, prefer:
+
+```bash
+bash ~/.claude/skills/code-director/scripts/dispatch.sh worktree /abs/source-repo /abs/new-worktree worker/topic
+```
+
+The helper registers independent Git metadata and pins source HEAD. It clones unchanged tracked files on supported filesystems (APFS on macOS, requiring Python 3 for native `clonefile`), uses Git for source edits or missing files, and reports `clonedFiles`, `copiedFiles` and `checkoutFiles`; ordinary copies do not prove disk savings. Untracked dependencies, outputs and session data are not copied. Keep the source stable during creation. Older plugins and repositories with submodules use `git worktree add -b worker/topic /abs/new-worktree <base-sha>` instead.
+
+Executors work only in the assigned directory, check symlinks and absolute paths before builds, and keep writable dependencies and outputs separate. The director reuses idle trees when suitable; after integration and stopping their tasks, it preserves required files and removes obsolete trees with `git worktree remove`. Branches are retained. Pane expiry does not reclaim directories, and a worktree must remain while its thread still needs `continue`. Read-only source investigations may use a shared checkout at a pinned SHA; tests that write files need isolation too.
 
 **Detached start, events instead of waits.** Task runs use native background jobs; `dispatch` checks startup for up to 10 seconds, returning early once the job is running with a thread ID or has finished. A job that fails during this check, or a launch the companion rejects, returns `STATUS: failed` with an `ERROR:` line; later completion, questions, and notes come back through the plugin's tasks pane. Reviews start as a detached process and are reported by an event monitor.
 

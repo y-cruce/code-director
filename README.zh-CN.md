@@ -140,7 +140,7 @@ Codex 的上下文窗口很大，一个线程会记住它读过的所有代码�
 
 ### 看进度
 
-Codex 在跑的时候，执行 `/codex:status` 能看到本仓库正在跑和最近完成的任务及当前阶段。`/codex:result <job-id>` 看某次的完整输出。只要视口停在底部，任务面板会跟随不断增长的轨迹；向上滚动后会停止跟随。任务结束后会在面板保留 15 分钟。`/codex:tasks refresh` 让面板从磁盘重建，`/codex:tasks forget <序号|名称>` 去掉其中一行；主会话在 Bash 里用 `dispatch.sh pane refresh`、`dispatch.sh pane forget <序号|名称|任务 ID>` 做同样的事，`dispatch.sh pane list` 列出每一行在面板上和磁盘上的状态。这些操作都不改任务文件。
+Codex 在跑的时候，执行 `/codex:status` 能看到本仓库正在跑和最近完成的任务及当前阶段。`/codex:result <job-id>` 看某次的完整输出。只要视口停在底部，任务面板会跟随不断增长的轨迹；向上滚动后会停止跟随。任务结束后会在面板保留 3 分钟。`/codex:tasks refresh` 让面板从磁盘重建，`/codex:tasks forget <序号|名称>` 去掉其中一行；主会话在 Bash 里用 `dispatch.sh pane refresh`、`dispatch.sh pane forget <序号|名称|任务 ID>` 做同样的事，`dispatch.sh pane list` 列出每一行在面板上和磁盘上的状态。这些操作都不改任务文件。
 
 配合支持这些功能的插件和 Claude Code 2.1.299 以上版本，待回答、失败和完成事件会使用你的通知渠道。面板里任务名和状态都可以点击；没有界面的会话会说明面板无法显示。在 `/codex:tasks`、`/codex:tasks forget` 或 `/codex:message` 的目标位置输入部分名称或 ID，按 Tab 填入对应 ID；message 只补全正在运行的任务，待回答的请求用 `/codex:answer` 处理。
 
@@ -172,7 +172,15 @@ Codex 知道自己是被谁启动的。`investigate` 和 `implement` 两种模�
 
 **一个问题一个线程，review 只在值得时做。** 改代码类任务先派 `implement`（改动范围不清楚时先 `investigate`，再在同一线程里 `continue` 做实现）。实现回来后由 Claude 自行判断这次改动值不值得派 `adversarial-review`，审或不审都会说明。有问题让 Codex 在同一线程里用 `continue` 自己修，最多三轮。
 
-**并行改文件用 worktree。** 同一个 checkout 里同时只跑一路 `implement`。要让 Codex 用两种方案各写一版，给每一路建一个 `git worktree` 并写进 `CWD:`，各改各的，Claude 最后挑。
+**并行改文件使用 worktree 配合写时复制。** 主 agent 为每个写入者创建独立目录，包括主 agent 自己，并把绝对路径写进 `CWD:`。插件包含 `scripts/worktree.mjs` 时，优先使用：
+
+```bash
+bash ~/.claude/skills/code-director/scripts/dispatch.sh worktree /abs/source-repo /abs/new-worktree worker/topic
+```
+
+入口先登记独立的 Git 管理信息并固定源 HEAD，再对未修改的跟踪文件请求写时复制，在 macOS 上通过 Python 3 调用 APFS 原生 `clonefile`；源目录修改过或缺失的文件从固定提交检出。返回的 `clonedFiles`、`copiedFiles`、`checkoutFiles` 分别记录克隆、普通复制和 Git 检出数量，普通复制不代表节省磁盘。未跟踪的依赖、构建产物和会话数据不复制。创建期间保持源目录稳定。旧插件及含子模块的仓库使用 `git worktree add -b worker/topic /abs/new-worktree <base-sha>`。
+
+Executor 只在分配目录工作，构建前检查符号链接和绝对路径，各自维护可写依赖与产物。主 agent 在合适时复用空闲工作树；集成完成并停止任务后，保存需要的文件，再通过 `git worktree remove` 回收过期目录，保留分支。面板隐藏不会回收目录；线程还需要 `continue` 时必须保留原工作树。只读源码调查可以在共享仓库按固定 SHA 读取，写文件的测试也需要隔离。
 
 **后台启动、用事件代替等待。** task 类任务使用插件原生后台任务，`dispatch` 最多检查启动状态 10 秒，任务进入 running 且已有线程 ID，或任务已结束时提前返回。检查期间失败的任务，以及 companion 拒绝启动的派发，都返回 `STATUS: failed` 和一行 `ERROR:`；后续完成、结构化反问和通知经插件的任务面板回到主会话。review 以脱离进程的方式启动，由事件监视器报告。
 
