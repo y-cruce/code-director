@@ -178,9 +178,11 @@ Codex 知道自己是被谁启动的。`investigate` 和 `implement` 两种模�
 bash ~/.claude/skills/code-director/scripts/dispatch.sh worktree /abs/source-repo /abs/new-worktree worker/topic
 ```
 
-入口先登记独立的 Git 管理信息并固定源 HEAD，再对未修改的跟踪文件请求写时复制，在 macOS 上通过 Python 3 调用 APFS 原生 `clonefile`；源目录修改过或缺失的文件从固定提交检出。返回的 `clonedFiles`、`copiedFiles`、`checkoutFiles` 分别记录克隆、普通复制和 Git 检出数量，普通复制不代表节省磁盘。未跟踪的依赖、构建产物和会话数据不复制。创建期间保持源目录稳定。旧插件及含子模块的仓库使用 `git worktree add -b worker/topic /abs/new-worktree <base-sha>`。
+入口先登记独立的 Git 管理信息并固定源 HEAD，再对未修改的跟踪文件请求写时复制，在 macOS 上通过 Python 3 调用 APFS 原生 `clonefile`；源目录修改过或缺失的文件从固定提交检出。返回的 `clonedFiles`、`copiedFiles`、`checkoutFiles` 分别记录克隆、普通复制和 Git 检出数量，普通复制不代表节省磁盘。未跟踪的依赖、构建产物和会话数据不复制。创建期间保持源目录稳定。旧插件使用 `git worktree add -b worker/topic /abs/new-worktree <base-sha>`。
 
-Executor 只在分配目录工作，构建前检查符号链接和绝对路径，各自维护可写依赖与产物。主 agent 在合适时复用空闲工作树；集成完成并停止任务后，保存需要的文件，再通过 `git worktree remove` 回收过期目录，保留分支。面板隐藏不会回收目录；线程还需要 `continue` 时必须保留原工作树。只读源码调查可以在共享仓库按固定 SHA 读取，写文件的测试也需要隔离。
+插件 1.4.45 起支持嵌套 Git 子模块和带检查的回收。每个子模块都有独立的 Git 管理信息和对象库，固定到父仓记录的提交；优先使用本地源子模块，否则按配置 URL 克隆。本地缺少固定提交时，即使源子模块已初始化，也会按该 URL 补取，需要正常的网络和访问权限。已有对象文件也尽可能使用写时复制，数量由 `clonedObjectFiles` / `copiedObjectFiles` 单独报告；成功返回时没有对象硬链接或 alternates 依赖。`submodules` 回执列出路径、提交、本地或远程来源及 `fetchedFromRemote`。初始化可能在主仓共享配置中补全子模块登记。访问或验证失败时保留未完成目录，不向其中派任务。判断以 Git 的 gitlink 为准，不因存在 `.gitmodules` 文件就拒绝创建。
+
+Executor 只在分配目录工作，构建前检查符号链接和绝对路径，各自维护可写依赖与产物。先提交子模块修改，再更新主仓 gitlink，并报告需要保留的提交。主 agent 在集成完成并停止任务后，通过 `dispatch.sh worktree remove /abs/source-repo /abs/worktree` 回收目录；入口检查主仓和全部子模块，存在未提交、未跟踪或忽略文件，以及不在创建时引用和远端跟踪引用中的子模块新增提交时会拒绝删除。检查通过后才使用 Git 对已初始化子模块要求的 force 参数，保留主仓分支。面板隐藏不会回收目录；线程还需要 `continue` 时必须保留原工作树。只读源码调查可以在共享仓库按固定 SHA 读取，写文件的测试也需要隔离。
 
 **后台启动、用事件代替等待。** task 类任务使用插件原生后台任务，`dispatch` 最多检查启动状态 10 秒，任务进入 running 且已有线程 ID，或任务已结束时提前返回。检查期间失败的任务，以及 companion 拒绝启动的派发，都返回 `STATUS: failed` 和一行 `ERROR:`；后续完成、结构化反问和通知经插件的任务面板回到主会话。review 以脱离进程的方式启动，由事件监视器报告。
 

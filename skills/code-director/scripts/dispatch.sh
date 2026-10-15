@@ -15,6 +15,8 @@
 #   dispatch.sh companion              print the selected codex-companion.mjs path
 #   dispatch.sh worktree <source-repo> <new-directory> <new-branch>
 #                                          register an independent worktree and clone tracked files where supported
+#   dispatch.sh worktree remove <source-repo> <worktree>
+#                                          remove after checking files and submodule commits
 #   dispatch.sh pane [list|refresh|forget <n|name|task id>]
 #                                          ask this session's tasks pane for its rows (pane vs disk status), make it
 #                                          rebuild from disk, or hide one row; job files are never touched
@@ -96,7 +98,7 @@ EOF
   cat <<EOF
 - Other tasks started by the same director may be running in this workspace. Do not coordinate with them yourself; tell the director what they need to know in your final message.
 - Other tasks currently running: ${SIBLINGS:-none known}
-- Work only in the assigned CWD. The director owns worktree creation and cleanup. APFS clones have independent files but may retain symlinks or absolute paths into another checkout: check those before builds, keep outputs local, and never replace isolation with hard links or shared writable dependencies. Do not copy a worktree's .git file or delete another task's directory. Report the branch, commit and any remaining files the director must preserve when you finish.
+- Work only in the assigned CWD. The director owns worktree creation and cleanup. APFS clones have independent files but may retain symlinks or absolute paths into another checkout: check those before builds, keep outputs local, and never replace isolation with hard links or shared writable dependencies. Do not copy a worktree's .git file or delete another task's directory. Submodules have independent Git state at the parent's pinned commits; commit submodule edits before updating the parent gitlink, and report any submodule commits that must be preserved before cleanup. Report the branch, commit and any remaining files the director must preserve when you finish.
 
 ---- Brief ----
 EOF
