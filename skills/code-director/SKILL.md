@@ -16,7 +16,20 @@ Premise: the scarce resource is the Claude main thread's context and output. The
 
 ## Dispatching
 
-All dispatch logic lives in `~/.claude/skills/code-director/scripts/dispatch.sh` (which Codex command to run, the director note, sandbox flags, review fallbacks). One dispatch is two calls. First write the dispatch text to a file with the Write tool (in your scratchpad directory, one file per task, for example `<scratchpad>/codex/locate-answer-validation.md`; the script copies it into its own work directory, so several files in one folder can be dispatched at the same time):
+All dispatch logic lives in `~/.claude/skills/code-director/scripts/dispatch.sh` (which Codex command to run, the director note, sandbox flags, review fallbacks).
+
+**With the Codex plugin's tools (1.4.48 or later), one dispatch is one call.** When `mcp__codex__dispatch` is in your tool list, use it and its siblings instead of Bash. Every header below is a field of its own: `mode`, `name` and `cwd` are required, `brief` holds the body, and `thread`, `base`, `write` (true for `WRITE: yes`), `effort`, `model`, `siblings`, `sandbox`, `executor`, `executor_mode` and `executor_effort` are filled only when the rules below call for that header. The tool runs `dispatch.sh dispatch` with the brief on stdin and returns the same lines. Several dispatches go in one message as separate tool calls. The other tools replace the Bash calls named later in this skill:
+
+| Tool | Replaces |
+|---|---|
+| `mcp__codex__message` (`job`, `cwd`, `text`, `delivery`: `queue`, `steer` or `interrupt`) | writing a prompt file and running `dispatch.sh message` (`steer` is the call with no flag) |
+| `mcp__codex__answer` (`job`, `cwd`, `request`, `answers` as the JSON map) | writing an answers file and running `dispatch.sh answer` |
+| `mcp__codex__result` (`job`, `cwd`) | `node "$(… dispatch.sh companion)" result <job-id> --cwd <repo>` |
+| `mcp__codex__status` (`cwd`, optional `job`) | `status <job-id> --cwd <repo> --json` on the companion |
+
+A failed call comes back as a tool error carrying the script's own line (`NAME_REQUIRED`, `MESSAGE_FAILED …`, `ANSWER_FAILED …`), read the same way as below. Everything else in this skill (worktrees, `pane`, `follow`, `events`) stays a Bash call.
+
+**Without those tools** (an older plugin, or a session where mods do not load), one dispatch is two calls. First write the dispatch text to a file with the Write tool (in your scratchpad directory, one file per task, for example `<scratchpad>/codex/locate-answer-validation.md`; the script copies it into its own work directory, so several files in one folder can be dispatched at the same time):
 
 ```
 MODE: investigate
@@ -32,9 +45,9 @@ Then one foreground Bash call that starts it and returns in seconds:
 bash ~/.claude/skills/code-director/scripts/dispatch.sh dispatch < <that file's absolute path>
 ```
 
-It prints `STATUS: started`, `JOB:`, `NAME:`, `THREAD:` and sometimes a `NOTE:` line, or `STATUS: failed` / `ERROR:` when the dispatch itself is wrong — fix it and dispatch again. Several dispatches go in one message as separate Bash calls. Keep each job id together with its repository and its thread.
+Either way it prints `STATUS: started`, `JOB:`, `NAME:`, `THREAD:` and sometimes a `NOTE:` line, or `STATUS: failed` / `ERROR:` when the dispatch itself is wrong — fix it and dispatch again. Several dispatches go in one message as separate Bash calls. Keep each job id together with its repository and its thread.
 
-The brief never passes through a shell command, so it appears nowhere but in your own Write row.
+The brief never passes through a shell command, so it appears nowhere but in your own tool call or Write row.
 
 Nothing waits on the job. The Codex plugin's tasks pane watches every job this session started and draws its live trace. For each repository with a live job, it automatically arms one Monitor running `dispatch.sh events`; the Monitor's background notification can reach you while a turn is still running. `/codex:tasks` opens the pane, `/codex:tasks <n>` or `/codex:tasks <part of a name>` switches to one, and Tab walks the list at its foot, the trace following wherever it lands.
 
