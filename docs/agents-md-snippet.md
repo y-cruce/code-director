@@ -1,13 +1,13 @@
-把下面的规则加入 `~/.codex/AGENTS.md`，让 Codex 主 agent 在各项目中使用原生调度；只对单个项目启用时，加入该项目的 `AGENTS.md`。技能先通过 `bash ./install-codex.sh` 安装。
+Append the block below to `~/.codex/AGENTS.md` (applies to all projects) or to a project's `AGENTS.md` so the Codex main agent routes matching tasks through native delegation. Install the skill first with `bash ./install-codex.sh`.
 
 ```markdown
-## Codex 主 agent 调度
+## Codex main agent delegation
 
-读代码理解现状、排查 bug、写实现、做 review 等需要委派的任务，主 agent 先加载 `~/.codex/skills/codex-director/SKILL.md`，按技能流程写任务书、派发完整任务、核对结果、做取舍并完成交付。简单任务和给人看的文档直接处理。收到父 agent 任务书的子 agent 作为执行器完成任务，只有父 agent 明确分配进一步委派时才继续派生。
+For tasks that warrant delegation (reading code to understand it, debugging, implementation, review), the main agent first loads `~/.codex/skills/codex-director/SKILL.md` and follows it: write the brief, dispatch a complete task, verify the result, make the trade-offs, and finish delivery. Handle simple tasks and human-facing writing directly. A subagent that receives a brief from its parent acts as an executor and spawns further agents only when the parent explicitly assigns more delegation.
 
-通过原生 `collaboration.spawn_agent` 派发任务，用 `fork_turns: "none"` 和自包含任务书说明目录、范围、上下文与验收要求。互不依赖的任务并行执行，并发数遵守当前宿主限制；模型和推理设置默认继承当前配置。并行写入分配独立工作树或目录。
+Dispatch through native `collaboration.spawn_agent` with `fork_turns: "none"` and a self-contained brief naming the directory, scope, context, and acceptance criteria. Run independent tasks in parallel within the host's concurrency limit; inherit the current model and reasoning settings by default. Give parallel writers isolated worktrees or directories.
 
-向运行中的 agent 补充事实或决定用 `send_message`；同一问题的后续工作用 `followup_task`，它也负责启动空闲 agent 的下一轮。必须立刻停止当前执行再改方向时，先 `interrupt_agent`，检查已有改动后再安排后续任务。用 `wait_agent` 等待消息、用 `list_agents` 检查状态；15 分钟无进展时检查存活和阻塞情况。同一问题尽量保留同一个 agent，独立复核使用新 agent。
+Use `send_message` to add facts or decisions to a running agent; use `followup_task` for further work on the same problem, which also starts an idle agent's next turn. When current execution must stop before changing direction, `interrupt_agent` first, inspect existing changes, then assign the follow-up. Use `wait_agent` to wait for messages and `list_agents` to check status; after 15 minutes without progress, check liveness and blockers. Keep the same agent for the same problem; use a fresh agent for independent review.
 
-子 agent 的结论核对原始证据后再采用；主 agent 负责转发跨任务信息、集成改动、执行必要的定向验证并汇报。只读、修改、提交、推送和部署的权限沿用用户授权，缺少信息或授权时先报告，不自行推断。
+Check a subagent's conclusions against the original evidence before adopting them; the main agent forwards cross-task facts, integrates changes, runs the required focused checks, and reports. Read, modify, commit, push, and deploy permissions follow the user's authorization; when information or authorization is missing, report it instead of inferring it.
 ```

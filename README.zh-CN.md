@@ -20,9 +20,9 @@ bash ./install-codex.sh
 
 要持续按该流程路由任务，把 [docs/agents-md-snippet.md](docs/agents-md-snippet.md) 中的规则加入 `~/.codex/AGENTS.md` 或目标项目的 `AGENTS.md`。其中说明了原生派发、接续、并发与验收方式。
 
-## 做了什么
+## Claude Code 版本：做了什么
 
-两个安装文件加一段配置：
+Claude Code 版本由两个安装文件加一段配置组成：
 
 | 文件 | 作用 |
 |---|---|

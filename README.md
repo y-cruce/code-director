@@ -20,9 +20,9 @@ The installer links `${CODEX_HOME:-$HOME/.codex}/skills/codex-director` to this 
 
 For a persistent routing rule, add the block in [docs/agents-md-snippet.md](docs/agents-md-snippet.md) to `~/.codex/AGENTS.md` or the target project's `AGENTS.md`. It covers native dispatch, follow-ups, concurrency, and verification.
 
-## What it consists of
+## Claude Code edition: what it consists of
 
-Two installed files and one config snippet:
+The Claude Code edition is two installed files and one config snippet:
 
 | File | Purpose |
 |---|---|
