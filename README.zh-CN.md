@@ -84,7 +84,7 @@ cd code-director
 ./install.sh
 ```
 
-脚本把 `~/.claude/skills/code-director` 软链到这个 checkout，之后的修改和 `git pull` 不用重装就生效，并删除旧版本留下的转发 agent。checkout 不要移动或删除，否则软链会失效。然后按 `docs/claude-md-snippet.md` 把路由规则加到 `~/.claude/CLAUDE.md`，在 Claude Code 里执行 `/reload-plugins` 或重开会话。
+脚本把 `~/.claude/skills/code-director` 软链到这个 checkout，之后的修改和 `git pull` 不用重装就生效，并删除旧版本留下的转发 agent。它还会把 Codex 插件的五个派单工具（`mcp__codex__dispatch`、`message`、`answer`、`result`、`status`）加进 `~/.claude/settings.json` 的 `permissions.allow`，调用时不再弹权限提示；文件里的其他内容保持不变，已经有这些规则时不做任何改动，文件不是合法 JSON 时也不碰它。checkout 不要移动或删除，否则软链会失效。然后按 `docs/claude-md-snippet.md` 把路由规则加到 `~/.claude/CLAUDE.md`，在 Claude Code 里执行 `/reload-plugins` 或重开会话。
 
 ## 使用
 

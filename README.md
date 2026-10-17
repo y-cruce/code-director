@@ -84,7 +84,7 @@ cd code-director
 ./install.sh
 ```
 
-The script links `~/.claude/skills/code-director` to this checkout, so later edits and `git pull` take effect without reinstalling, and removes forwarding agents left by older versions. Keep the checkout where it is; moving or deleting it breaks the link. Then append the snippet from `docs/claude-md-snippet.md` to `~/.claude/CLAUDE.md` and run `/reload-plugins` in Claude Code, or start a new session.
+The script links `~/.claude/skills/code-director` to this checkout, so later edits and `git pull` take effect without reinstalling, and removes forwarding agents left by older versions. It also adds the Codex plugin's five dispatch tools (`mcp__codex__dispatch`, `message`, `answer`, `result`, `status`) to `permissions.allow` in `~/.claude/settings.json`, so they run without a prompt; it keeps everything else in the file, does nothing if the rules are already there, and leaves a file that is not valid JSON untouched. Keep the checkout where it is; moving or deleting it breaks the link. Then append the snippet from `docs/claude-md-snippet.md` to `~/.claude/CLAUDE.md` and run `/reload-plugins` in Claude Code, or start a new session.
 
 ## Usage
 
