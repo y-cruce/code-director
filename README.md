@@ -6,6 +6,20 @@ Make Claude Code hand off code reading, debugging, implementation, and code revi
 
 Use it when you run Claude Code alongside at least one executor (Codex on a ChatGPT subscription, qodercli, or another ACP agent) and you want Claude's context and output spent on judgement rather than on reading files and writing code.
 
+## Codex main agent edition
+
+Use [codex-director](skills/codex-director/SKILL.md) when Codex itself is the main agent. It delegates complete tasks through native `collaboration` tools, continues the same agent for follow-ups, receives questions and results through its mailbox, and verifies the returned work. Parallel writers use isolated directories; assigned executors do not recursively enter director mode.
+
+Install from this checkout:
+
+```bash
+bash ./install-codex.sh
+```
+
+The installer links `${CODEX_HOME:-$HOME/.codex}/skills/codex-director` to this checkout and preserves any conflicting existing installation. Keep the checkout in place. The skill is available on the next Codex turn; invoke it with `$codex-director`, or describe a coding task that benefits from delegation. The host must expose native `collaboration` tools. This edition runs through those tools without an app-server or Claude plugin; small tasks stay with the main agent.
+
+For a persistent routing rule, add the block in [docs/agents-md-snippet.md](docs/agents-md-snippet.md) to `~/.codex/AGENTS.md` or the target project's `AGENTS.md`. It covers native dispatch, follow-ups, concurrency, and verification.
+
 ## What it consists of
 
 Two installed files and one config snippet:

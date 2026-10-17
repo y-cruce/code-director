@@ -6,6 +6,20 @@
 
 适合的场景：你有 Claude Code 和至少一个执行器（Codex 的 ChatGPT 订阅、qodercli，或别的 ACP agent），想让 Claude 少读文件、少写代码，把上下文和输出留给判断和取舍。
 
+## Codex 主 agent 版本
+
+Codex 担任主 agent 时使用 [codex-director](skills/codex-director/SKILL.md)。它通过原生 `collaboration` 工具派发完整任务，在同一个 agent 上继续后续工作，通过消息接收问题与结果，并核对交付。并行写入使用独立目录，执行任务的子 agent 按任务书工作，避免递归进入调度模式。
+
+在本 checkout 中安装：
+
+```bash
+bash ./install-codex.sh
+```
+
+安装器把 `${CODEX_HOME:-$HOME/.codex}/skills/codex-director` 软链到本 checkout，遇到已有的冲突安装会保留原内容并退出。请保留 checkout 的位置。技能从下一轮 Codex 对话可用，可以用 `$codex-director` 点名，或直接描述适合委派的代码任务。宿主需要提供原生 `collaboration` 工具。这个版本直接使用这些工具，无需 app-server 或 Claude 插件；简单任务由主 agent 直接处理。
+
+要持续按该流程路由任务，把 [docs/agents-md-snippet.md](docs/agents-md-snippet.md) 中的规则加入 `~/.codex/AGENTS.md` 或目标项目的 `AGENTS.md`。其中说明了原生派发、接续、并发与验收方式。
+
 ## 做了什么
 
 两个安装文件加一段配置：
