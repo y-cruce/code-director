@@ -170,11 +170,11 @@ do_launch() {
           echo 'You are performing a code review. The working tree contains many untracked files; do not treat them as part of this change.'
           echo 'First determine the scope of the change yourself with git status --short and git diff (including --cached). If the brief below lists files, the brief takes precedence.'
           echo 'Report in review form: each finding with file:line, what can go wrong, the impact, and the concrete fix; ordered by severity. If there are no material findings, say so explicitly.'
-          echo 'Read-only. Do not modify any file.'
+          echo "Write the full review report as Markdown to $WORK/review.md, then end your reply with the findings in brief and that path."
           [ "$MODE" = adversarial-review ] && echo 'Take an adversarial stance: assume the change fails in subtle, high-cost ways. Focus on trust boundaries, data loss or duplication, retries and idempotency, concurrency and ordering, empty/timeout/degraded paths, and compatibility.'
           echo; echo '---- Brief ----'; cat "$WORK/brief.md"
         } > "$WORK/prompt.md"
-        echo 'NOTE: too many untracked files; fell back to a read-only task for this review' > "$WORK/note"
+        echo "NOTE: too many untracked files; ran this review as a task; full report: $WORK/review.md" > "$WORK/note"
         CMD=(node "$CC" task --cwd "$CWD" --prompt-file "$WORK/prompt.md")
       fi ;;
     *)
@@ -270,6 +270,20 @@ do_launch() {
       esac
     elif [ -n "$explicit" ]; then
       echo "NOTE: the installed plugin has no --sandbox/--network options; SANDBOX: $explicit was ignored and Codex ran in the plugin's default sandbox" > "$WORK/note"
+    fi
+  elif [ "${CMD[2]:-}" = review ] || [ "${CMD[2]:-}" = adversarial-review ]; then
+    # Same policy for Codex's native review: no sandbox, so it can build and run
+    # tests while checking its findings. Review commands take --sandbox but not --network.
+    local explicit="$SANDBOX"; SANDBOX="${SANDBOX:-full}"
+    if grep -q 'codex-companion.mjs review .*--sandbox' "$CC"; then
+      case "$SANDBOX" in
+        full)    CMD+=(--sandbox danger-full-access) ;;
+        network) CMD+=(--sandbox workspace-write) ;;
+        default) ;;   # the plugin's own read-only review
+        *)       echo "CODEX_FAILED: SANDBOX must be 'full', 'network' or 'default', got '$SANDBOX'"; exit 1 ;;
+      esac
+    elif [ -n "$explicit" ]; then
+      echo "NOTE: the installed plugin's review has no --sandbox option; SANDBOX: $explicit was ignored and the review ran read-only" > "$WORK/note"
     fi
   fi
 
