@@ -7,7 +7,7 @@ description: A way of working where another coding agent executes and Claude onl
 
 Premise: the scarce resource is the Claude main thread's context and output. Therefore:
 
-- **Do not read files to understand code.** To learn "where is X handled" or "why does this happen", write a brief and dispatch it to Codex. Let Codex read and report back. (Trivial lookups are the exception; see "What not to delegate".)
+- **Do not read files to understand code.** To learn "where is X handled" or "why does this happen", write a brief and dispatch it to Codex. Let Codex read and report back. (Trivial lookups are the exception; see "What not to delegate". Checking the `file:line` a review finding cites is judging, not exploring; see "Judging review findings".)
 - **Do not write large implementations yourself.** Specify what is needed, let Codex write it, and review.
 - **Dispatch whole tasks.** One task goes from reading the code to a verified result; do not split a problem into explore, plan and implement stages handed to different jobs.
 - **Run independent work in parallel.** A job takes minutes to come back, and running jobs one after another leaves that time idle. Whenever parts of the work do not need each other's results, dispatch them together, and keep working while they run.
@@ -234,7 +234,7 @@ path/to/b.py  -- suspect
 1. Write the brief. If the requirement is ambiguous, ask the user first; do not let Codex guess.
 2. Dispatch `implement`, with the acceptance tests or commands in the brief. When the affected area is unclear, the same task finds it first; a separate `investigate` is for when you need its answer before you can decide what to build, and the implementation then follows as `continue` in that thread.
 3. When the implementation returns, **decide whether a review is worth it**. Review is not a fixed step; it is your call, made on the returned result. Weigh how much could go wrong if the change is subtly wrong against what a review costs (a brief, a wait, and one more round of context), and dispatch `adversarial-review` only when the risk justifies it (intent of the change and your main concerns as the body; prefer `BASE:`, since a fallback review is task-class and would become the most recent thread). When you skip it, go straight to wrap-up and tell the user in one line that you skipped the review and why.
-4. If you reviewed: for high or medium findings, dispatch `continue` with `THREAD:` and `WRITE: yes` so Codex fixes them in the same thread, then judge again whether another review round is needed. At most three rounds; step in yourself if it is still not clean.
+4. If you reviewed: judge every finding against the source (see "Judging review findings"), then dispatch the ones you accepted as `continue` with `THREAD:` and `WRITE: yes` so Codex fixes them in the same thread, then judge again whether another review round is needed. At most three rounds; step in yourself if it is still not clean.
 5. Wrap up: run the tests or verification command, spot-check one or two `file:line` claims from Codex, then report to the user.
 
 Read-only tasks (questions, investigations): one `investigate` route is enough. Follow-up questions from the user about the same topic go to `continue` with the same `THREAD:`.
@@ -260,4 +260,20 @@ You read Codex's text with the companion's `result <job-id>`; it comes back unch
 - Before acting on a conclusion that decides what happens next (a root cause, "this message was lost", "that turn is running"), check the raw data it rests on yourself: the file, the job state, the command output. Do not act on a report's reading of intermediate state.
 - A conclusion with no evidence attached goes back as a `continue` asking for the evidence; do not build on it.
 - On `STATUS: failed` or `CODEX_FAILED`: report the most useful log lines to the user. Do not take over and redo the whole task yourself.
-- Do not auto-apply every review finding; decide first which ones are real.
+- Do not auto-apply every review finding, and do not dismiss one without looking; judge each as below.
+
+### Judging review findings
+
+A review report is a set of claims to check, not a verdict to pass along. Forwarding the findings, or dismissing them against a rule you already hold ("out of scope", "pre-existing", "only style") without opening the code, is relaying, not directing. For every finding, before deciding anything, go back to the source:
+
+1. **Location**: open the cited `file:line` (Read with offset/limit, or a grep) on the reviewed revision and confirm the code the finding describes is actually there.
+2. **Trigger**: name the concrete input, call path or state that reaches it, traced from a real caller. If you cannot find one, say so.
+3. **Impact**: what goes wrong when it triggers (wrong result, lost or duplicated data, crash, a cosmetic difference), how likely it is, and who notices.
+
+Then give the finding one verdict, with the evidence from those three checks:
+
+- **Accept**: the location is real, the trigger is reachable, and the impact is worth the fix. It goes to the implementation thread as `continue` with `WRITE: yes`.
+- **Reject**: cite what disproves it: the line does not do what the finding says, the path is unreachable (name the guard at its `file:line`), or the impact is nil. A rule on its own ("out of scope", "pre-existing") is not a reason; a real defect outside this change's scope is reported to the user as such, not dropped.
+- **Unresolved**: when a few reads cannot settle it, dispatch `continue` with `THREAD: <review thread>` asking the reviewer for exactly the missing piece (the call path, a reproduction, a failing test), written to a file. Do not guess either way.
+
+The reviewer's severity is an input, not the decision: a "high" with no reachable trigger is rejected, and a "low" that corrupts data is accepted. Keep these reads to the cited lines and their direct callers; if confirming a finding means understanding a whole subsystem, it is unresolved and goes back to the reviewer. Report to the user one line per finding: the verdict and the evidence behind it (`file:line`, command output).
