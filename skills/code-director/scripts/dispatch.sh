@@ -110,34 +110,42 @@ EOF
 EOF
   python3 - "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd -P)/context.sh" <<'PY'
 import json, os, pathlib, shlex, sys
+sys.stdout.reconfigure(encoding="utf-8", errors="replace")
 tool = shlex.quote(sys.argv[1])
-transcript = pathlib.Path(os.environ.get("CODEX_COMPANION_TRANSCRIPT_PATH", ""))
-if not transcript.is_file():
-    session = os.environ.get("CODEX_COMPANION_SESSION_ID", "")
-    config = pathlib.Path(os.environ.get("CLAUDE_CONFIG_DIR", pathlib.Path.home() / ".claude"))
-    matches = sorted((config / "projects").glob("*/" + session + ".jsonl")) if session and pathlib.Path(session).name == session else []
-    transcript = matches[0] if len(matches) == 1 else None
 start = None
-if transcript:
-    try:
-        with transcript.open() as f:
+memory = None
+try:
+    transcript = pathlib.Path(os.environ.get("CODEX_COMPANION_TRANSCRIPT_PATH", ""))
+    if not transcript.is_file():
+        session = os.environ.get("CODEX_COMPANION_SESSION_ID", "")
+        config = pathlib.Path(os.environ.get("CLAUDE_CONFIG_DIR", pathlib.Path.home() / ".claude"))
+        matches = sorted((config / "projects").glob("*/" + session + ".jsonl")) if session and pathlib.Path(session).name == session else []
+        transcript = matches[0] if len(matches) == 1 else None
+    if transcript:
+        with transcript.open(encoding="utf-8", errors="replace") as f:
             for line in f:
                 try:
                     record = json.loads(line)
-                except ValueError:
+                except (ValueError, RecursionError):
                     continue
-                if isinstance(record, dict) and record.get("cwd"):
-                    start = record["cwd"]
+                value = record.get("cwd") if isinstance(record, dict) else None
+                if isinstance(value, str) and value.strip():
+                    start = value
                     break
-    except OSError:
-        pass
+    if start:
+        index = transcript.parent / "memory" / "MEMORY.md"
+        if index.is_file():
+            memory = index
+except Exception:
+    # Optional startup metadata must not prevent the base instructions below.
+    start = None
+    memory = None
 print("Shared context tool: `" + sys.argv[1] + "`.")
 rules = "bash " + tool + " rules"
 if start:
     print("Main agent startup directory: `" + start + "`.")
     rules += " --from " + shlex.quote(start)
-    memory = transcript.parent / "memory" / "MEMORY.md"
-    if memory.is_file():
+    if memory:
         print("Memory index (read-only): `" + str(memory) + "`.")
         rules += " --memory " + shlex.quote(str(memory))
 print("Run commands in the assigned CWD (or pass --cwd). Before work, run `" + rules + "` and read the listed files; then run `bash " + tool + " find <task keywords>` and `bash " + tool + " find --kind repo-map`. If no repo-map exists, save one after learning the repository.")

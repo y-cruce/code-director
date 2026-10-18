@@ -17,21 +17,31 @@ def git(*args):
 
 
 def load(path):
-    raw = path.read_text()
-    header, body = raw[4:].split("\n---\n", 1)
-    entry = {}
-    for line in header.splitlines():
-        if line.startswith("  - "):
-            value = line[4:]
-            entry["files"].append(json.loads(value) if value.startswith(chr(34)) else value)
-        else:
-            key, value = line.split(":", 1)
-            value = value.strip()
-            if key == "files":
-                entry[key] = []
+    try:
+        raw = path.read_text(encoding="utf-8")
+        if not raw.startswith("---\n"):
+            raise ValueError("missing frontmatter")
+        header, body = raw[4:].split("\n---\n", 1)
+        entry = {}
+        for line in header.split("\n"):
+            if line.startswith("  - "):
+                value = line[4:]
+                entry["files"].append(json.loads(value) if value.startswith(chr(34)) else value)
             else:
-                entry[key] = json.loads(value) if value.startswith(chr(34)) else value
-    return entry, body
+                key, value = line.split(":", 1)
+                value = value.strip()
+                if key == "files":
+                    entry[key] = []
+                else:
+                    entry[key] = json.loads(value) if value.startswith(chr(34)) else value
+        for key in ["id", "kind", "status", "title", "commit", "source", "supersedes", "created"]:
+            if not isinstance(entry.get(key), str):
+                raise ValueError("missing or invalid " + key)
+        if not isinstance(entry.get("files"), list) or not all(isinstance(item, str) and "@" in item for item in entry["files"]):
+            raise ValueError("missing or invalid files")
+        return entry, body, raw
+    except (OSError, ValueError, KeyError, TypeError) as error:
+        raise ValueError("cannot read entry " + str(path) + ": " + str(error)) from None
 
 
 def write(path, entry, body):
@@ -43,7 +53,7 @@ def write(path, entry, body):
         else:
             lines.append(key + ": " + json.dumps(value, ensure_ascii=False))
     lines.extend(["---", body.rstrip(), ""])
-    with tempfile.NamedTemporaryFile(mode="w", dir=entries, prefix=".", delete=False) as f:
+    with tempfile.NamedTemporaryFile(mode="w", encoding="utf-8", dir=entries, prefix=".", delete=False) as f:
         f.write("\n".join(lines))
     os.replace(f.name, path)
 
@@ -94,14 +104,12 @@ entries = (cwd / common).resolve() / "agent-context" / "entries"
 
 try:
     if args.command == "rules":
+        # Assumes Codex uses its default .git project root marker.
         directories = []
         if args.start:
             start = Path(args.start).resolve()
-            if start in root.parents:
-                directory = start
-                for part in root.relative_to(start).parts:
-                    directories.append(directory)
-                    directory = directory / part
+            directories = [directory for directory in reversed(root.parents)
+                           if directory == start or directory in start.parents or start in directory.parents]
         for directory in directories:
             for name in ["AGENTS.md", "AGENTS.override.md", "CLAUDE.md"]:
                 path = directory / name
@@ -135,12 +143,16 @@ try:
         print(entry_id)
     elif args.command == "find":
         for path in sorted(entries.glob("*.md")):
-            entry, body = load(path)
+            try:
+                entry, body, raw = load(path)
+            except ValueError as error:
+                print("context: skipping " + str(error), file=sys.stderr)
+                continue
             if entry["status"] == "retracted" and not args.all:
                 continue
             if args.kind and entry["kind"] != args.kind:
                 continue
-            if not all(word.casefold() in path.read_text().casefold() for word in args.words):
+            if not all(word.casefold() in raw.casefold() for word in args.words):
                 continue
             print("\t".join(value.replace("\t", " ").replace("\r", " ").replace("\n", " ") for value in
                               [entry["id"], entry["status"], freshness(entry), entry["title"], entry["source"]]))
@@ -148,10 +160,10 @@ try:
         if Path(args.id).name != args.id or args.id in [".", ".."]:
             parser.error("invalid entry id")
         path = entries / (args.id + ".md")
-        entry, body = load(path)
+        entry, body, raw = load(path)
         if args.command == "show":
             print("Freshness: " + freshness(entry))
-            print(path.read_text(), end="")
+            print(raw, end="")
         else:
             entry["status"] = "verified" if args.command == "verify" else "retracted"
             if args.command == "retract" and args.reason:

@@ -77,7 +77,7 @@ bash "$CONTEXT" retract <id> --reason 'Evidence no longer supports this conclusi
 bash "$CONTEXT" find --all
 ```
 
-All commands accept `--cwd /path/to/repo`; `--files` paths are relative to that directory. `rules` accepts optional `--from` and `--memory`: it lists rule files between the startup directory and repository root, plus in-repository `CLAUDE.md` files where neither `AGENTS.md` nor `AGENTS.override.md` is present, and an existing memory index. Use `--source` to override the automatic `CODEX_THREAD_ID` source, and `--supersedes <id>` when saving a correction. Retracted entries are hidden unless `find --all` is used. Before dispatching new work the director searches for prior conclusions and continues their source thread when it belongs to this checkout; reviews keep a fresh thread.
+All commands accept `--cwd /path/to/repo`; `--files` paths are relative to that directory. `rules` accepts optional `--from` and `--memory`: it lists applicable rule files above the target repository, including common ancestors of sibling worktrees and directories between startup and repository root, plus in-repository `CLAUDE.md` files where neither `AGENTS.md` nor `AGENTS.override.md` is present, and an existing memory index. Use `--source` to override the automatic `CODEX_THREAD_ID` source, and `--supersedes <id>` when saving a correction. Retracted entries are hidden unless `find --all` is used. Before dispatching new work the director searches for prior conclusions and continues their source thread when it belongs to this checkout; reviews keep a fresh thread.
 
 ## Relationship to the official Codex plugin
 
