@@ -14,6 +14,29 @@ Premise: the scarce resource is the Claude main thread's context and output. The
 - **Dispatch work whose result you can check.** Every brief carries acceptance criteria. An implementation comes back as a diff and test output; an investigation comes back with `file:line` or command output behind each conclusion. A summary with nothing to check it against is not a basis for a decision.
 - **You do four things only**: talk to the user, break the task down and write briefs, judge Codex's results, and make the calls.
 
+## Responsibilities
+
+| Area | Director | Executor | `context.sh` |
+|---|---|---|---|
+| Dispatch | Choose a direct answer, an existing thread, or a new task; find prior conclusions first | Execute the brief | `find` includes the source thread |
+| Brief | Give the goal, acceptance criteria and task-specific context; reference existing conclusions by ID | Follow the brief | — |
+| Rules | Fix recurring gaps in memory, or draft repository AGENTS.md changes for user confirmation before committing | Read the files listed by `rules` before work | Lists rules Codex does not discover and the memory index |
+| Conclusions | Check evidence, `verify` or `retract`, and resolve conflicts | `find`, recheck file:line before citing, and `save` useful conclusions; name corrected entries with `--supersedes` | Records commit, file blobs and source; flags possible staleness |
+| Memory | Sole writer of user preferences, decisions and corrections, following existing memory rules | Read only; return suggested memories | Lists the index when available |
+| Siblings | Sole relay: forward entry IDs or send `message --queue` | Report cross-task facts to the director | — |
+| Delivery | Check evidence and report to the user | Self-check within authorized scope; return conclusions, evidence, check results and saved IDs | — |
+| Summaries and verification | Own phase/session summaries and entry verification | Do not write summaries, write memory, or verify your own entries | — |
+
+## Shared context
+
+Use `bash ~/.claude/skills/code-director/scripts/context.sh find <keywords>` before writing a brief. `find --kind repo-map` locates the repository map; `show <id>` reads an entry. Pass `--cwd <repo>` when outside the assigned repository. Briefs reference existing conclusions by ID instead of repeating them. Follow up with the source thread when it belongs to the current checkout; otherwise start a new task with the relevant IDs. Reviews use a fresh thread and name any entries they cite.
+
+When judging a result, check its evidence and use `verify <id>` or `retract <id> --reason <reason>`. Verification changes status, retaining the recorded file blobs; a changed file remains marked "可能过期". Relay conclusions to siblings by ID. Save user preferences, decisions and corrections in the director's memory under its existing rules; executors only suggest what to remember.
+
+Entries live in `<git-common-dir>/agent-context/entries/`, shared by the repository's worktrees and outside tracked files. Each Markdown entry records its kind, status, commit, file blobs and source (`CODEX_THREAD_ID` when available, or `--source`). Executors save reusable repository maps, root causes, code paths, pitfalls and decisions with file:line evidence. Ordinary progress and one-off details stay in the task result.
+
+If two or more tasks repeat the same mistaken assumption or lack the same prerequisite, fix the gap once in memory, or draft a repository AGENTS.md change and obtain user confirmation before committing it. Dispatch one task to verify the correction before dispatching the rest.
+
 ## Dispatching
 
 All dispatch logic lives in `~/.claude/skills/code-director/scripts/dispatch.sh` (which Codex command to run, the director note, sandbox flags, review fallbacks).
@@ -182,7 +205,7 @@ On plugins that expose the `notify_director` tool, Codex can send you a one-line
 
 ### What Codex knows about you
 
-For `investigate` and `implement`, dispatch.sh prepends a fixed note to your brief: Codex was started by a director agent, not a human; `request_user_input` questions are addressed to you; `notify_director` exists (when the plugin supports it); other Codex tasks may be running and Codex must not coordinate with them itself but tell you instead. The `SIBLINGS:` header fills in the list of running tasks. Consequences for you:
+For `investigate` and `implement`, dispatch.sh prepends a note to your brief: Codex was started by a director agent, not a human; `request_user_input` questions are addressed to you; `notify_director` exists (when the plugin supports it); other Codex tasks may be running and Codex must not coordinate with them itself but tell you instead. It adds self-checks, the missing-prerequisite question channel, and executor rules against summaries or memory writes. Executors first run `context.sh rules` and read its output, then `find`; they save a repository map when absent and return saved IDs and suggested memories. The note locates the startup directory from the session transcript (falling back to the session ID) and includes its memory index when present; when unavailable, repository context still works. The `SIBLINGS:` list comes last, just before the brief. Consequences for you:
 
 - Codex tasks never talk to each other. You are the only relay. When a new task overlaps the area of a running one, send the running job a one-line `message` saying what has started, and put the running job in the new task's `SIBLINGS:` line. Most dispatches need neither.
 - A `request_user_input` from Codex is a question to you. Answer from established facts; ask the user only for choices or authorization you do not have.
@@ -231,7 +254,7 @@ path/to/b.py  -- suspect
 
 ## Standard pipeline (code changes)
 
-1. Write the brief. If the requirement is ambiguous, ask the user first; do not let Codex guess.
+1. Run `context.sh find`, then write the brief with relevant entry IDs. Continue a source thread from the current checkout when the work belongs to it. If the requirement is ambiguous, ask the user first; do not let Codex guess.
 2. Dispatch `implement`, with the acceptance tests or commands in the brief. When the affected area is unclear, the same task finds it first; a separate `investigate` is for when you need its answer before you can decide what to build, and the implementation then follows as `continue` in that thread.
 3. When the implementation returns, **decide whether a review is worth it**. Review is not a fixed step; it is your call, made on the returned result. Weigh how much could go wrong if the change is subtly wrong against what a review costs (a brief, a wait, and one more round of context), and dispatch `adversarial-review` only when the risk justifies it (intent of the change and your main concerns as the body; prefer `BASE:`, since a fallback review is task-class and would become the most recent thread). When you skip it, go straight to wrap-up and tell the user in one line that you skipped the review and why.
 4. If you reviewed: judge every finding against the source (see "Judging review findings"), then dispatch the ones you accepted as `continue` with `THREAD:` and `WRITE: yes` so Codex fixes them in the same thread, then judge again whether another review round is needed. At most three rounds; step in yourself if it is still not clean.

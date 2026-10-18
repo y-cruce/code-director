@@ -19,4 +19,5 @@ else
   echo "Installed: $TARGET -> $SOURCE"
 fi
 
+echo "Shared context tool: $TARGET/scripts/context.sh"
 echo 'Available on your next Codex turn. Invoke with $codex-director.'

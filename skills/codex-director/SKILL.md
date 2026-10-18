@@ -15,13 +15,34 @@ Apply this workflow only as the main agent. When a parent assigns you a task, ex
 
 Before delegating, read the applicable repository instructions and establish the target repository, revision, permitted writes, required tests, and delivery requirements. Carry the user's existing authorization into each brief; delegation does not authorize additional actions.
 
+## Responsibilities
+
+| Area | Main agent | Executor | `context.sh` |
+|---|---|---|---|
+| Dispatch | Choose direct work, a source agent in this checkout, or a new task; find prior conclusions first | Execute the brief | `find` includes the source thread |
+| Brief | Give the goal, acceptance criteria and task-specific context; reference conclusions by ID | Follow the brief | — |
+| Rules | Fix recurring gaps in memory, or draft repository AGENTS.md changes for user confirmation before committing | Read the files listed by `rules` before work | Lists rules Codex does not discover and the memory index |
+| Conclusions | Check evidence, `verify` or `retract`, and resolve conflicts | `find`, recheck file:line, and `save` useful conclusions; correct old entries with `--supersedes` | Records commit, blobs and source; flags possible staleness |
+| Memory | Sole writer under the user's memory rules | Read only; return suggested memories | Lists the index when available |
+| Siblings | Sole relay of cross-task facts and entry IDs | Report to the parent | — |
+| Delivery | Check evidence and report to the user | Self-check within scope; return evidence, results and saved IDs | — |
+| Summaries and verification | Own phase/session summaries and entry verification | Do not write summaries, write memory, or verify your own entries | — |
+
+## Shared context
+
+The shared tool is `${CODEX_HOME:-$HOME/.codex}/skills/codex-director/scripts/context.sh`; expand this to an absolute path when giving it to an executor. Installation links the tool to the same implementation as the Claude route. Run `bash <tool> find <keywords>` before a brief, and `show <id>` for relevant entries; pass `--cwd <repo>` when needed. Include IDs instead of repeating conclusions. Continue the source agent when it belongs to this checkout and is available through native follow-up; otherwise start a new agent. Reviews stay independent and report any cited IDs.
+
+Entries live in `<git-common-dir>/agent-context/entries/`, shared by every worktree and outside tracked files. Save evidenced repository maps, root causes, code paths, build/test pitfalls and technical decisions. `save` reads its body from stdin, records the commit and file blobs, and uses `CODEX_THREAD_ID` as source when available (`--source` overrides it). The main agent checks evidence before `verify <id>` or `retract <id> --reason <reason>`; verification retains the recorded blobs, so changed files still show "可能过期". Forward entry IDs to siblings through the parent. Only the main agent writes user preferences, decisions and corrections to memory, within the user's memory permissions.
+
+If two or more tasks repeat the same mistaken assumption or lack the same prerequisite, fix it once in memory, or draft repository AGENTS.md changes for user confirmation before committing. Send one task to validate the correction before dispatching the rest.
+
 ## Dispatch
 
 Give one agent a whole problem: investigation through implementation and focused verification when authorized. Continue that problem with the same agent; use a fresh agent for an independent review. Dispatch independent tasks together when useful, within the runtime's concurrency limit, which includes the main agent.
 
 Use `collaboration.spawn_agent` with a short, distinct `task_name`, `fork_turns: "none"`, and a self-contained `message`. Keep the inherited model and reasoning settings unless the user or applicable instructions explicitly select others. Record the returned agent ID and canonical task name with its goal and assigned directory. Native agent IDs replace the old plugin job/thread IDs.
 
-A brief should include:
+Every new executor message includes the working rules and shared-context instructions below. Fill in the absolute tool path, and the main agent startup directory and memory index when known; omit those optional paths when unknown. `rules` still works without `--from`. A brief should include:
 
 ```text
 ROLE: executor. Execute this brief; do not enter director mode or delegate further.
@@ -31,11 +52,31 @@ CWD: <absolute assigned directory; pass it as workdir in shell calls>
 REVISION: <branch and fixed SHA or baseline, when relevant>
 SCOPE: <read-only or exact permitted files and actions>
 CONTEXT: <user requirements, applicable repository instructions, relevant facts>
-SIBLINGS: <other active tasks and their owned paths, if any>
 ACCEPTANCE: <expected behavior, focused checks, required evidence and delivery>
 
 If information or a decision is missing, send_message to PARENT with the
 question and the work you can still do. Never infer new authorization.
+If a prerequisite is missing, say exactly what is missing through that channel; do not substitute, mock, or guess.
+Before delivery, run relevant tests or commands within the brief scope and
+include a result summary. Do not write phase summaries or session summaries.
+
+SHARED CONTEXT TOOL: <absolute path to context.sh>
+MAIN STARTUP DIRECTORY: <when known>
+MEMORY INDEX (read-only): <when known>
+Run commands in CWD (or pass --cwd). Before work, run bash <tool> rules
+[--from <startup directory>] [--memory <index>] and read the listed files.
+Then run bash <tool> find <task keywords> and find --kind repo-map. If no
+repo-map exists, save one after learning the repository. Save reusable,
+evidenced root causes, non-obvious code paths, build/test pitfalls and
+technical decisions with save --kind K --title T --files a,b (body from stdin).
+Include file:line evidence. Do not save ordinary progress or one-off details.
+Use --supersedes <id> when correcting an entry. The parent alone verifies or
+retracts entries. Before citing another entry, recheck its file:line against
+current code; entries marked "可能过期" must be rechecked. Memory is read-only.
+Relay cross-task facts through the parent; do not coordinate with siblings.
+End your reply with saved IDs and "建议记住" (suggested memories).
+
+SIBLINGS: <other active tasks and their owned paths, if any>
 Return conclusions with file:line or command evidence, changes, test results,
 unverified items, and any branch/commit/files that must be preserved.
 ```

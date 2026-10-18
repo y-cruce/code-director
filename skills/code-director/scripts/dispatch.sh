@@ -97,8 +97,58 @@ EOF
   fi
   cat <<EOF
 - Other tasks started by the same director may be running in this workspace. Do not coordinate with them yourself; tell the director what they need to know in your final message.
-- Other tasks currently running: ${SIBLINGS:-none known}
 - Work only in the assigned CWD. The director owns worktree creation and cleanup. APFS clones have independent files but may retain symlinks or absolute paths into another checkout: check those before builds, keep outputs local, and never replace isolation with hard links or shared writable dependencies. Do not copy a worktree's .git file or delete another task's directory. Submodules have independent Git state at the parent's pinned commits; commit submodule edits before updating the parent gitlink, and report any submodule commits that must be preserved before cleanup. Report the branch, commit and any remaining files the director must preserve when you finish.
+EOF
+  cat <<'EOF'
+
+## Working rules
+- Before delivery, run the tests or commands relevant to the change and include a result summary in your reply, within the brief's authorized scope.
+- If a prerequisite is missing, use the question channel above to say exactly what is missing. Do not substitute, mock, or guess.
+- Do not write phase summaries or session summaries. The director owns them.
+
+## Shared context
+EOF
+  python3 - "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd -P)/context.sh" <<'PY'
+import json, os, pathlib, shlex, sys
+tool = shlex.quote(sys.argv[1])
+transcript = pathlib.Path(os.environ.get("CODEX_COMPANION_TRANSCRIPT_PATH", ""))
+if not transcript.is_file():
+    session = os.environ.get("CODEX_COMPANION_SESSION_ID", "")
+    config = pathlib.Path(os.environ.get("CLAUDE_CONFIG_DIR", pathlib.Path.home() / ".claude"))
+    matches = sorted((config / "projects").glob("*/" + session + ".jsonl")) if session and pathlib.Path(session).name == session else []
+    transcript = matches[0] if len(matches) == 1 else None
+start = None
+if transcript:
+    try:
+        with transcript.open() as f:
+            for line in f:
+                try:
+                    record = json.loads(line)
+                except ValueError:
+                    continue
+                if isinstance(record, dict) and record.get("cwd"):
+                    start = record["cwd"]
+                    break
+    except OSError:
+        pass
+print("Shared context tool: `" + sys.argv[1] + "`.")
+rules = "bash " + tool + " rules"
+if start:
+    print("Main agent startup directory: `" + start + "`.")
+    rules += " --from " + shlex.quote(start)
+    memory = transcript.parent / "memory" / "MEMORY.md"
+    if memory.is_file():
+        print("Memory index (read-only): `" + str(memory) + "`.")
+        rules += " --memory " + shlex.quote(str(memory))
+print("Run commands in the assigned CWD (or pass --cwd). Before work, run `" + rules + "` and read the listed files; then run `bash " + tool + " find <task keywords>` and `bash " + tool + " find --kind repo-map`. If no repo-map exists, save one after learning the repository.")
+PY
+  cat <<'EOF'
+Save reusable, evidenced root causes, non-obvious code paths, build/test pitfalls, and technical decisions with `save --kind K --title T --files a,b` (body from stdin). Ordinary progress and one-off details do not belong in the library. Include file:line evidence; use --supersedes <id> when correcting an entry. Entries start unverified; the director alone verifies or retracts them.
+Before citing another entry, recheck its file:line against current code; entries marked "可能过期" must be rechecked. Memory is read-only for executors. End your reply with saved entry IDs and "建议记住" (suggested memories) for the director. Relay cross-task facts through the director.
+EOF
+  cat <<EOF
+
+Other tasks currently running: ${SIBLINGS:-none known}
 
 ---- Brief ----
 EOF
