@@ -22,12 +22,13 @@ bash ./install-codex.sh
 
 ## Claude Code 版本：做了什么
 
-Claude Code 版本由两个安装文件加一段配置组成：
+Claude Code 版本包含一份技能、两个脚本和一段配置：
 
 | 文件 | 作用 |
 |---|---|
 | `skills/code-director/SKILL.md` | 给 Claude 主线程的工作规则：什么活派出去、任务书怎么写、并行怎么派、review 循环怎么跑 |
 | `skills/code-director/scripts/dispatch.sh` | 全部派单逻辑：按 MODE 选执行器和命令、加上给执行器的调度者说明、通过插件的 `codex-companion.mjs` 启动、等待、收集；`dispatch` 一次调用启动一个任务，`follow` 阻塞跟随一个任务的事件流直到主会话需要出手，`events` 给监视器输出任务事件 |
+| `skills/code-director/scripts/context.sh` | 保存仓库结论，列出执行任务需要补读的规则与记忆索引 |
 | `docs/claude-md-snippet.md` | 加进 `CLAUDE.md` 的路由规则，保证相关任务每次都走这条路 |
 
 工作流程：
@@ -55,6 +56,28 @@ sequenceDiagram
     C->>C: 跑测试、抽查 文件:行号
     C->>U: 汇报
 ```
+
+## 共享上下文
+
+子 agent 开始排查或实现前，先运行 `context.sh rules` 并读它列出的规则文件和记忆索引，再用 `find` 查相关结论。Claude 路线从会话记录定位启动目录，拿不到路径时按会话 ID 兜底；启动信息未知时，仓库内的规则和结论仍可用。Codex 主 agent 会在新任务消息里带上相同要求。子 agent 在缺少仓库地图时存一条，引用前复核 file:line，交付前跑相关检查，回复附上保存的条目 ID 和“建议记住”。主 agent 负责记忆写入、总结、结论核实和任务间的消息转发。
+
+结论是一条一个 Markdown 文件，放在 `<git-common-dir>/agent-context/entries/`，同一仓库的 worktree 共用，位于跟踪文件之外。条目记录 commit、文件 blob 和来源线程；文件修改或缺失时，`find` 和 `show` 标出“可能过期”。新条目默认 `unverified`，主 agent 核对证据后核实或撤回；核实只改状态，保留原始文件 hash。
+
+在仓库中使用下列 Claude 工具路径；Codex 路线使用 `${CODEX_HOME:-$HOME/.codex}/skills/codex-director/scripts/context.sh`：
+
+```bash
+CONTEXT=~/.claude/skills/code-director/scripts/context.sh
+bash "$CONTEXT" rules --from /主agent启动目录 --memory /记忆目录/MEMORY.md
+bash "$CONTEXT" find --kind repo-map
+bash "$CONTEXT" find 路由
+bash "$CONTEXT" show <id>
+printf '%s\n' '结论，附 path/to/file:line 证据。' | bash "$CONTEXT" save --kind code-path --title '路由路径' --files path/to/file
+bash "$CONTEXT" verify <id>
+bash "$CONTEXT" retract <id> --reason '当前证据不再支持这条结论'
+bash "$CONTEXT" find --all
+```
+
+所有命令都接受 `--cwd /仓库路径`，`--files` 相对该目录解析。`rules` 的 `--from`、`--memory` 均可省略：它列出启动目录到仓库根之间的规则文件、仓库内既没有 `AGENTS.md` 也没有 `AGENTS.override.md` 的目录里的 `CLAUDE.md`，以及存在的记忆索引。`--source` 可覆盖自动记录的 `CODEX_THREAD_ID` 来源；保存纠正后的结论时用 `--supersedes <id>`。撤回的条目仅在 `find --all` 中显示。主 agent 派新工作前先查结论，来源线程属于当前 checkout 时优先续接；评审使用独立线程。
 
 ## 和官方 Codex 插件的关系
 

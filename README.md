@@ -22,12 +22,13 @@ For a persistent routing rule, add the block in [docs/agents-md-snippet.md](docs
 
 ## Claude Code edition: what it consists of
 
-The Claude Code edition is two installed files and one config snippet:
+The Claude Code edition installs a skill with two scripts and one config snippet:
 
 | File | Purpose |
 |---|---|
 | `skills/code-director/SKILL.md` | Working rules for the Claude main thread: what to delegate, how to write a brief, how to run things in parallel, how the review loop works |
 | `skills/code-director/scripts/dispatch.sh` | All dispatch logic: picks the executor and its command by MODE, prepends the director note, starts the run through the plugin's `codex-companion.mjs`, waits, collects; `dispatch` starts a job in one call, `follow` blocks on a job's event stream until the director must act, `events` streams job events for a monitor |
+| `skills/code-director/scripts/context.sh` | Repository conclusions and discovery of rules and memory the executor needs |
 | `docs/claude-md-snippet.md` | A routing rule for `CLAUDE.md` so that matching tasks always go through this path |
 
 Flow:
@@ -55,6 +56,28 @@ sequenceDiagram
     C->>C: runs tests, spot-checks file:line claims
     C->>U: reports
 ```
+
+## Shared context
+
+Before starting an investigation or implementation, executors run `context.sh rules` and read the listed rules and memory index, then `find` for related conclusions. The Claude route locates the startup directory from its transcript, with a session-ID fallback; when that information is unavailable, repository rules and conclusions still work. The Codex main agent puts the same instructions in each new executor message. Executors save a repository map if absent, check cited file:line evidence, run relevant checks, and return saved entry IDs and suggested memories. The main agent owns memory writes, summaries, entry verification and communication between tasks.
+
+Conclusions are Markdown files under `<git-common-dir>/agent-context/entries/`, shared by all worktrees of that repository and outside tracked files. They record a commit, file blobs and source thread; `find` and `show` mark changed or missing files "可能过期" (possibly stale). Entries start `unverified`. The director checks evidence before verifying or retracting them. Verification changes status and preserves the original file hashes.
+
+From a repository, use the Claude tool path below, or `${CODEX_HOME:-$HOME/.codex}/skills/codex-director/scripts/context.sh` on the Codex route:
+
+```bash
+CONTEXT=~/.claude/skills/code-director/scripts/context.sh
+bash "$CONTEXT" rules --from /main-agent/startup --memory /path/to/memory/MEMORY.md
+bash "$CONTEXT" find --kind repo-map
+bash "$CONTEXT" find routing
+bash "$CONTEXT" show <id>
+printf '%s\n' 'Conclusion with path/to/file:line evidence.' | bash "$CONTEXT" save --kind code-path --title 'Routing path' --files path/to/file
+bash "$CONTEXT" verify <id>
+bash "$CONTEXT" retract <id> --reason 'Evidence no longer supports this conclusion'
+bash "$CONTEXT" find --all
+```
+
+All commands accept `--cwd /path/to/repo`; `--files` paths are relative to that directory. `rules` accepts optional `--from` and `--memory`: it lists rule files between the startup directory and repository root, plus in-repository `CLAUDE.md` files where neither `AGENTS.md` nor `AGENTS.override.md` is present, and an existing memory index. Use `--source` to override the automatic `CODEX_THREAD_ID` source, and `--supersedes <id>` when saving a correction. Retracted entries are hidden unless `find --all` is used. Before dispatching new work the director searches for prior conclusions and continues their source thread when it belongs to this checkout; reviews keep a fresh thread.
 
 ## Relationship to the official Codex plugin
 
