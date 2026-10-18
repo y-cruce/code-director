@@ -110,11 +110,11 @@ try:
             start = Path(args.start).resolve()
             directories = [directory for directory in reversed(root.parents)
                            if directory == start or directory in start.parents or start in directory.parents]
+        paths = []
         for directory in directories:
-            for name in ["AGENTS.md", "AGENTS.override.md", "CLAUDE.md"]:
-                path = directory / name
-                if path.is_file():
-                    print(path)
+            path = directory / "CLAUDE.md"
+            if path.is_file():
+                paths.append(path)
         directory = root
         for part in [None, *cwd.relative_to(root).parts]:
             if part is not None:
@@ -122,7 +122,21 @@ try:
             if not any((directory / name).is_file() for name in ["AGENTS.md", "AGENTS.override.md"]):
                 path = directory / "CLAUDE.md"
                 if path.is_file():
-                    print(path)
+                    paths.append(path)
+        seen = set()
+        for path in paths:
+            candidates = [path]
+            for line in path.read_text(encoding="utf-8").splitlines():
+                line = line.strip()
+                if line.startswith("@"):
+                    imported = (path.parent / Path(line[1:]).expanduser()).resolve()
+                    if imported.is_file():
+                        candidates.append(imported)
+            for candidate in candidates:
+                candidate = candidate.resolve()
+                if candidate not in seen:
+                    print(candidate)
+                    seen.add(candidate)
         if args.memory and Path(args.memory).is_file():
             print(Path(args.memory).resolve())
     elif args.command == "save":

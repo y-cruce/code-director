@@ -21,7 +21,7 @@ Before delegating, read the applicable repository instructions and establish the
 |---|---|---|---|
 | Dispatch | Choose direct work, a source agent in this checkout, or a new task; find prior conclusions first | Execute the brief | `find` includes the source thread |
 | Brief | Give the goal, acceptance criteria and task-specific context; reference conclusions by ID | Follow the brief | — |
-| Rules | Fix recurring gaps in memory, or draft repository AGENTS.md changes for user confirmation before committing | Read the files listed by `rules` before work | Lists rules Codex does not discover and the memory index |
+| Rules | Fix recurring gaps in memory, or draft repository AGENTS.md changes for user confirmation before committing | Read the files listed by `rules` before work | Lists Claude-loaded rules Codex does not discover and the memory index |
 | Conclusions | Check evidence, `verify` or `retract`, and resolve conflicts | `find`, recheck file:line, and `save` useful conclusions; correct old entries with `--supersedes` | Records commit, blobs and source; flags possible staleness |
 | Memory | Sole writer under the user's memory rules | Read only; return suggested memories | Lists the index when available |
 | Siblings | Sole relay of cross-task facts and entry IDs | Report to the parent | — |
@@ -29,6 +29,8 @@ Before delegating, read the applicable repository instructions and establish the
 | Summaries and verification | Own phase/session summaries and entry verification | Do not write summaries, write memory, or verify your own entries | — |
 
 ## Shared context
+
+`rules --from <startup>` lists `CLAUDE.md` files above the target repository, including common ancestors of sibling worktrees and directories between startup and repository root. Inside the repository, it lists `CLAUDE.md` only where neither `AGENTS.md` nor `AGENTS.override.md` exists. Each listed file is followed by existing whole-line `@path` imports (relative to that file, with `~/` supported), expanded one level and deduplicated in order. Standalone ancestor `AGENTS.md` and `AGENTS.override.md` files are not listed. `--memory <index>` appends an existing memory index.
 
 The shared tool is `${CODEX_HOME:-$HOME/.codex}/skills/codex-director/scripts/context.sh`; expand this to an absolute path when giving it to an executor. Installation links the tool to the same implementation as the Claude route. Run `bash <tool> find <keywords>` before a brief, and `show <id>` for relevant entries; pass `--cwd <repo>` when needed. Include IDs instead of repeating conclusions. Continue the source agent when it belongs to this checkout and is available through native follow-up; otherwise start a new agent. Reviews stay independent and report any cited IDs.
 

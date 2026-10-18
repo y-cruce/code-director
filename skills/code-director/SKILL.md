@@ -20,7 +20,7 @@ Premise: the scarce resource is the Claude main thread's context and output. The
 |---|---|---|---|
 | Dispatch | Choose a direct answer, an existing thread, or a new task; find prior conclusions first | Execute the brief | `find` includes the source thread |
 | Brief | Give the goal, acceptance criteria and task-specific context; reference existing conclusions by ID | Follow the brief | — |
-| Rules | Fix recurring gaps in memory, or draft repository AGENTS.md changes for user confirmation before committing | Read the files listed by `rules` before work | Lists rules Codex does not discover and the memory index |
+| Rules | Fix recurring gaps in memory, or draft repository AGENTS.md changes for user confirmation before committing | Read the files listed by `rules` before work | Lists Claude-loaded rules Codex does not discover and the memory index |
 | Conclusions | Check evidence, `verify` or `retract`, and resolve conflicts | `find`, recheck file:line before citing, and `save` useful conclusions; name corrected entries with `--supersedes` | Records commit, file blobs and source; flags possible staleness |
 | Memory | Sole writer of user preferences, decisions and corrections, following existing memory rules | Read only; return suggested memories | Lists the index when available |
 | Siblings | Sole relay: forward entry IDs or send `message --queue` | Report cross-task facts to the director | — |
@@ -28,6 +28,8 @@ Premise: the scarce resource is the Claude main thread's context and output. The
 | Summaries and verification | Own phase/session summaries and entry verification | Do not write summaries, write memory, or verify your own entries | — |
 
 ## Shared context
+
+`rules --from <startup>` lists `CLAUDE.md` files above the target repository, including common ancestors of sibling worktrees and directories between startup and repository root. Inside the repository, it lists `CLAUDE.md` only where neither `AGENTS.md` nor `AGENTS.override.md` exists. Each listed file is followed by existing whole-line `@path` imports (relative to that file, with `~/` supported), expanded one level and deduplicated in order. Standalone ancestor `AGENTS.md` and `AGENTS.override.md` files are not listed. `--memory <index>` appends an existing memory index.
 
 Use `bash ~/.claude/skills/code-director/scripts/context.sh find <keywords>` before writing a brief. `find --kind repo-map` locates the repository map; `show <id>` reads an entry. Pass `--cwd <repo>` when outside the assigned repository. Briefs reference existing conclusions by ID instead of repeating them. Follow up with the source thread when it belongs to the current checkout; otherwise start a new task with the relevant IDs. Reviews use a fresh thread and name any entries they cite.
 

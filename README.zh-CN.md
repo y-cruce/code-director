@@ -77,7 +77,7 @@ bash "$CONTEXT" retract <id> --reason '当前证据不再支持这条结论'
 bash "$CONTEXT" find --all
 ```
 
-所有命令都接受 `--cwd /仓库路径`，`--files` 相对该目录解析。`rules` 的 `--from`、`--memory` 均可省略：它列出目标仓库根以上适用的规则文件（包括兄弟 worktree 的共同上级目录，以及启动目录到仓库根之间的目录）、仓库内既没有 `AGENTS.md` 也没有 `AGENTS.override.md` 的目录里的 `CLAUDE.md`，以及存在的记忆索引。`--source` 可覆盖自动记录的 `CODEX_THREAD_ID` 来源；保存纠正后的结论时用 `--supersedes <id>`。撤回的条目仅在 `find --all` 中显示。主 agent 派新工作前先查结论，来源线程属于当前 checkout 时优先续接；评审使用独立线程。
+所有命令都接受 `--cwd /仓库路径`，`--files` 相对该目录解析。`rules` 的 `--from`、`--memory` 均可省略：它列出目标仓库根以上的 `CLAUDE.md`（包括兄弟 worktree 的共同上级目录，以及启动目录到仓库根之间的目录）、仓库内既没有 `AGENTS.md` 也没有 `AGENTS.override.md` 的目录里的 `CLAUDE.md`，以及存在的记忆索引。每份 `CLAUDE.md` 后紧跟其中整行 `@路径` 导入的现存文件，路径相对该文件所在目录解析，支持 `~/`；只展开一层，规则路径按顺序去重。上级目录的 `AGENTS.md` 和 `AGENTS.override.md` 仅在被导入时列出。`--source` 可覆盖自动记录的 `CODEX_THREAD_ID` 来源；保存纠正后的结论时用 `--supersedes <id>`。撤回的条目仅在 `find --all` 中显示。主 agent 派新工作前先查结论，来源线程属于当前 checkout 时优先续接；评审使用独立线程。
 
 ## 和官方 Codex 插件的关系
 
