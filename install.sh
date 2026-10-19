@@ -55,6 +55,9 @@ fs.renameSync(temp, file);
 console.log(`Permissions: added ${missing.join(", ")} to permissions.allow in ${file}.`);
 NODE
 
+# Dispatched Codex tasks follow the codex-executor skill, which Codex reads from its own skills directory.
+bash "$HERE/install-codex.sh" codex-executor
+
 echo "Installed:"
 echo "  $DEST/skills/code-director -> $HERE/skills/code-director"
 echo

@@ -16,19 +16,20 @@ Install from this checkout:
 bash ./install-codex.sh
 ```
 
-The installer links `${CODEX_HOME:-$HOME/.codex}/skills/codex-director` to this checkout and preserves any conflicting existing installation. Keep the checkout in place. The skill is available on the next Codex turn; invoke it with `$codex-director`, or describe a coding task that benefits from delegation. The host must expose native `collaboration` tools. This edition runs through those tools without an app-server or Claude plugin; small tasks stay with the main agent.
+The installer links `codex-director` and `codex-executor` under `${CODEX_HOME:-$HOME/.codex}/skills` to this checkout and preserves any conflicting existing installation. Keep the checkout in place. The skill is available on the next Codex turn; invoke it with `$codex-director`, or describe a coding task that benefits from delegation. The host must expose native `collaboration` tools. This edition runs through those tools without an app-server or Claude plugin; small tasks stay with the main agent.
 
 For a persistent routing rule, add the block in [docs/agents-md-snippet.md](docs/agents-md-snippet.md) to `~/.codex/AGENTS.md` or the target project's `AGENTS.md`. It covers native dispatch, follow-ups, concurrency, and verification.
 
 ## Claude Code edition: what it consists of
 
-The Claude Code edition installs a skill with two scripts and one config snippet:
+The Claude Code edition installs a skill with two scripts, a Codex skill for its executors, and one config snippet:
 
 | File | Purpose |
 |---|---|
 | `skills/code-director/SKILL.md` | Working rules for the Claude main thread: what to delegate, how to write a brief, how to run things in parallel, how the review loop works |
 | `skills/code-director/scripts/dispatch.sh` | All dispatch logic: picks the executor and its command by MODE, prepends the director note, starts the run through the plugin's `codex-companion.mjs`, waits, collects; `dispatch` starts a job in one call, `follow` blocks on a job's event stream until the director must act, `events` streams job events for a monitor |
 | `skills/code-director/scripts/context.sh` | Repository conclusions and discovery of rules and memory the executor needs |
+| `skills/codex-executor/SKILL.md` | Codex skill a dispatched task follows: working rules, the shared-context procedure and the reply format |
 | `docs/claude-md-snippet.md` | A routing rule for `CLAUDE.md` so that matching tasks always go through this path |
 
 Flow:
@@ -59,7 +60,7 @@ sequenceDiagram
 
 ## Shared context
 
-Before starting an investigation or implementation, executors run `context.sh rules` and read the listed rules and memory index, then `find` for related conclusions. The Claude route locates the startup directory from its transcript, with a session-ID fallback; when that information is unavailable, repository rules and conclusions still work. The Codex main agent puts the same instructions in each new executor message. Executors save a repository map if absent, check cited file:line evidence, run relevant checks, and return saved entry IDs and suggested memories. The main agent owns memory writes, summaries, entry verification and communication between tasks.
+Executors follow the `codex-executor` skill, which loads only for a task a main agent assigned; the director note names it, and a non-Codex executor gets its path to read. Before starting an investigation or implementation, executors run `context.sh rules` and read the listed rules and memory index, then `find` for related conclusions. The Claude route locates the startup directory from its transcript, with a session-ID fallback; when that information is unavailable, repository rules and conclusions still work. The Codex main agent names the same skill in each new executor message. Executors save a repository map if absent, check cited file:line evidence, run relevant checks, and return saved entry IDs and suggested memories. The main agent owns memory writes, summaries, entry verification and communication between tasks.
 
 Conclusions are Markdown files under `<git-common-dir>/agent-context/entries/`, shared by all worktrees of that repository and outside tracked files. They record a commit, file blobs and source thread; `find` and `show` mark changed or missing files "可能过期" (possibly stale). Entries start `unverified`. The director checks evidence before verifying or retracting them. Verification changes status and preserves the original file hashes.
 
@@ -107,7 +108,7 @@ cd code-director
 ./install.sh
 ```
 
-The script links `~/.claude/skills/code-director` to this checkout, so later edits and `git pull` take effect without reinstalling, and removes forwarding agents left by older versions. It also adds the Codex plugin's five dispatch tools (`mcp__codex__dispatch`, `message`, `answer`, `result`, `status`) to `permissions.allow` in `~/.claude/settings.json`, so they run without a prompt; it keeps everything else in the file, does nothing if the rules are already there, and leaves a file that is not valid JSON untouched. Keep the checkout where it is; moving or deleting it breaks the link. Then append the snippet from `docs/claude-md-snippet.md` to `~/.claude/CLAUDE.md` and run `/reload-plugins` in Claude Code, or start a new session.
+The script links `~/.claude/skills/code-director`, and `${CODEX_HOME:-$HOME/.codex}/skills/codex-executor` for the dispatched tasks, to this checkout, so later edits and `git pull` take effect without reinstalling, and removes forwarding agents left by older versions. It also adds the Codex plugin's five dispatch tools (`mcp__codex__dispatch`, `message`, `answer`, `result`, `status`) to `permissions.allow` in `~/.claude/settings.json`, so they run without a prompt; it keeps everything else in the file, does nothing if the rules are already there, and leaves a file that is not valid JSON untouched. Keep the checkout where it is; moving or deleting it breaks the link. Then append the snippet from `docs/claude-md-snippet.md` to `~/.claude/CLAUDE.md` and run `/reload-plugins` in Claude Code, or start a new session.
 
 ## Usage
 

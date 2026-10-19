@@ -11,7 +11,7 @@ Use the native `collaboration` tools exposed in the current session. Call them d
 
 ## Main agent and executor roles
 
-Apply this workflow only as the main agent. When a parent assigns you a task, execute that brief; do not load director mode or spawn another agent unless the parent explicitly assigns further delegation. Report findings, questions, and completion to the parent through the native mailbox.
+Apply this workflow only as the main agent. When a parent assigns you a task, execute that brief under the `codex-executor` skill; do not load director mode or spawn another agent unless the parent explicitly assigns further delegation. Report findings, questions, and completion to the parent through the native mailbox.
 
 Before delegating, read the applicable repository instructions and establish the target repository, revision, permitted writes, required tests, and delivery requirements. Carry the user's existing authorization into each brief; delegation does not authorize additional actions.
 
@@ -32,7 +32,7 @@ Before delegating, read the applicable repository instructions and establish the
 
 `rules --from <startup>` lists `CLAUDE.md` files above the target repository, including common ancestors of sibling worktrees and directories between startup and repository root. Inside the repository, it lists `CLAUDE.md` only where neither `AGENTS.md` nor `AGENTS.override.md` exists. Each listed file is followed by existing whole-line `@path` imports (relative to that file, with `~/` supported), expanded one level and deduplicated in order. Standalone ancestor `AGENTS.md` and `AGENTS.override.md` files are not listed. `--memory <index>` appends an existing memory index.
 
-The shared tool is `${CODEX_HOME:-$HOME/.codex}/skills/codex-director/scripts/context.sh`; expand this to an absolute path when giving it to an executor. Installation links the tool to the same implementation as the Claude route. Run `bash <tool> find <keywords>` before a brief, and `show <id>` for relevant entries; pass `--cwd <repo>` when needed. Include IDs instead of repeating conclusions. Continue the source agent when it belongs to this checkout and is available through native follow-up; otherwise start a new agent. Reviews stay independent and report any cited IDs.
+The shared tool is `${CODEX_HOME:-$HOME/.codex}/skills/codex-director/scripts/context.sh`. Installation links the tool to the same implementation as the Claude route. Run `bash <tool> find <keywords>` before a brief, and `show <id>` for relevant entries; pass `--cwd <repo>` when needed. Include IDs instead of repeating conclusions. Continue the source agent when it belongs to this checkout and is available through native follow-up; otherwise start a new agent. Reviews stay independent and report any cited IDs.
 
 Entries live in `<git-common-dir>/agent-context/entries/`, shared by every worktree and outside tracked files. Save evidenced repository maps, root causes, code paths, build/test pitfalls and technical decisions. `save` reads its body from stdin, records the commit and file blobs, and uses `CODEX_THREAD_ID` as source when available (`--source` overrides it). The main agent checks evidence before `verify <id>` or `retract <id> --reason <reason>`; verification retains the recorded blobs, so changed files still show "可能过期". Forward entry IDs to siblings through the parent. Only the main agent writes user preferences, decisions and corrections to memory, within the user's memory permissions.
 
@@ -44,7 +44,7 @@ Give one agent a whole problem: investigation through implementation and focused
 
 Use `collaboration.spawn_agent` with a short, distinct `task_name`, `fork_turns: "none"`, and a self-contained `message`. Keep the inherited model and reasoning settings unless the user or applicable instructions explicitly select others. Record the returned agent ID and canonical task name with its goal and assigned directory. Native agent IDs replace the old plugin job/thread IDs.
 
-Every new executor message includes the working rules and shared-context instructions below. Fill in the absolute tool path, and the main agent startup directory and memory index when known; omit those optional paths when unknown. `rules` still works without `--from`. A brief should include:
+Every new executor message names `$codex-executor`, which carries the working rules, the shared-context procedure and the reply format; add the main agent startup directory and memory index when known. A brief should include:
 
 ```text
 ROLE: executor. Execute this brief; do not enter director mode or delegate further.
@@ -58,25 +58,10 @@ ACCEPTANCE: <expected behavior, focused checks, required evidence and delivery>
 
 If information or a decision is missing, send_message to PARENT with the
 question and the work you can still do. Never infer new authorization.
-If a prerequisite is missing, say exactly what is missing through that channel; do not substitute, mock, or guess.
-Before delivery, run relevant tests or commands within the brief scope and
-include a result summary. Do not write phase summaries or session summaries.
 
-SHARED CONTEXT TOOL: <absolute path to context.sh>
+Use $codex-executor.
 MAIN STARTUP DIRECTORY: <when known>
 MEMORY INDEX (read-only): <when known>
-Run commands in CWD (or pass --cwd). Before work, run bash <tool> rules
-[--from <startup directory>] [--memory <index>] and read the listed files.
-Then run bash <tool> find <task keywords> and find --kind repo-map. If no
-repo-map exists, save one after learning the repository. Save reusable,
-evidenced root causes, non-obvious code paths, build/test pitfalls and
-technical decisions with save --kind K --title T --files a,b (body from stdin).
-Include file:line evidence. Do not save ordinary progress or one-off details.
-Use --supersedes <id> when correcting an entry. The parent alone verifies or
-retracts entries. Before citing another entry, recheck its file:line against
-current code; entries marked "可能过期" must be rechecked. Memory is read-only.
-Relay cross-task facts through the parent; do not coordinate with siblings.
-End your reply with saved IDs and "建议记住" (suggested memories).
 
 SIBLINGS: <other active tasks and their owned paths, if any>
 Return conclusions with file:line or command evidence, changes, test results,

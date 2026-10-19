@@ -101,17 +101,15 @@ EOF
 EOF
   cat <<'EOF'
 
-## Working rules
-- Before delivery, run the tests or commands relevant to the change and include a result summary in your reply, within the brief's authorized scope.
-- If a prerequisite is missing, use the question channel above to say exactly what is missing. Do not substitute, mock, or guess.
-- Do not write phase summaries or session summaries. The director owns them.
-
-## Shared context
+## Executor skill
 EOF
-  python3 - "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd -P)/context.sh" <<'PY'
-import json, os, pathlib, shlex, sys
+  python3 - "$(cd -P "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)/codex-executor/SKILL.md" "${EXECUTOR:-codex}" <<'PY'
+import json, os, pathlib, sys
 sys.stdout.reconfigure(encoding="utf-8", errors="replace")
-tool = shlex.quote(sys.argv[1])
+if sys.argv[2] == "codex":
+    print("Use the $codex-executor skill: it holds the working rules, the shared context tool, and what your reply must end with.")
+else:
+    print("Read `" + sys.argv[1] + "` and follow it: it holds the working rules, the shared context tool, and what your reply must end with.")
 start = None
 memory = None
 try:
@@ -137,23 +135,14 @@ try:
         if index.is_file():
             memory = index
 except Exception:
-    # Optional startup metadata must not prevent the base instructions below.
+    # Optional startup metadata must not break the note.
     start = None
     memory = None
-print("Shared context tool: `" + sys.argv[1] + "`.")
-rules = "bash " + tool + " rules"
 if start:
-    print("Main agent startup directory: `" + start + "`.")
-    rules += " --from " + shlex.quote(start)
+    print("Main agent startup directory (for `rules --from`): `" + start + "`.")
     if memory:
-        print("Memory index (read-only): `" + str(memory) + "`.")
-        rules += " --memory " + shlex.quote(str(memory))
-print("Run commands in the assigned CWD (or pass --cwd). Before work, run `" + rules + "` and read the listed files; then run `bash " + tool + " find <task keywords>` and `bash " + tool + " find --kind repo-map`. If no repo-map exists, save one after learning the repository.")
+        print("Memory index (for `rules --memory`, read-only): `" + str(memory) + "`.")
 PY
-  cat <<'EOF'
-Save reusable, evidenced root causes, non-obvious code paths, build/test pitfalls, and technical decisions with `save --kind K --title T --files a,b` (body from stdin). Ordinary progress and one-off details do not belong in the library. Include file:line evidence; use --supersedes <id> when correcting an entry. Entries start unverified; the director alone verifies or retracts them.
-Before citing another entry, recheck its file:line against current code; entries marked "可能过期" must be rechecked. Memory is read-only for executors. End your reply with saved entry IDs and "建议记住" (suggested memories) for the director. Relay cross-task facts through the director.
-EOF
   cat <<EOF
 
 Other tasks currently running: ${SIBLINGS:-none known}

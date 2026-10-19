@@ -16,19 +16,20 @@ Codex 担任主 agent 时使用 [codex-director](skills/codex-director/SKILL.md)
 bash ./install-codex.sh
 ```
 
-安装器把 `${CODEX_HOME:-$HOME/.codex}/skills/codex-director` 软链到本 checkout，遇到已有的冲突安装会保留原内容并退出。请保留 checkout 的位置。技能从下一轮 Codex 对话可用，可以用 `$codex-director` 点名，或直接描述适合委派的代码任务。宿主需要提供原生 `collaboration` 工具。这个版本直接使用这些工具，无需 app-server 或 Claude 插件；简单任务由主 agent 直接处理。
+安装器把 `${CODEX_HOME:-$HOME/.codex}/skills` 下的 `codex-director` 和 `codex-executor` 软链到本 checkout，遇到已有的冲突安装会保留原内容并退出。请保留 checkout 的位置。技能从下一轮 Codex 对话可用，可以用 `$codex-director` 点名，或直接描述适合委派的代码任务。宿主需要提供原生 `collaboration` 工具。这个版本直接使用这些工具，无需 app-server 或 Claude 插件；简单任务由主 agent 直接处理。
 
 要持续按该流程路由任务，把 [docs/agents-md-snippet.md](docs/agents-md-snippet.md) 中的规则加入 `~/.codex/AGENTS.md` 或目标项目的 `AGENTS.md`。其中说明了原生派发、接续、并发与验收方式。
 
 ## Claude Code 版本：做了什么
 
-Claude Code 版本包含一份技能、两个脚本和一段配置：
+Claude Code 版本包含一份技能、两个脚本、一份给执行任务用的 Codex 技能和一段配置：
 
 | 文件 | 作用 |
 |---|---|
 | `skills/code-director/SKILL.md` | 给 Claude 主线程的工作规则：什么活派出去、任务书怎么写、并行怎么派、review 循环怎么跑 |
 | `skills/code-director/scripts/dispatch.sh` | 全部派单逻辑：按 MODE 选执行器和命令、加上给执行器的调度者说明、通过插件的 `codex-companion.mjs` 启动、等待、收集；`dispatch` 一次调用启动一个任务，`follow` 阻塞跟随一个任务的事件流直到主会话需要出手，`events` 给监视器输出任务事件 |
 | `skills/code-director/scripts/context.sh` | 保存仓库结论，列出执行任务需要补读的规则与记忆索引 |
+| `skills/codex-executor/SKILL.md` | 派出的 Codex 任务遵循的技能：工作规则、共享上下文的用法和回复格式 |
 | `docs/claude-md-snippet.md` | 加进 `CLAUDE.md` 的路由规则，保证相关任务每次都走这条路 |
 
 工作流程：
@@ -59,7 +60,7 @@ sequenceDiagram
 
 ## 共享上下文
 
-子 agent 开始排查或实现前，先运行 `context.sh rules` 并读它列出的规则文件和记忆索引，再用 `find` 查相关结论。Claude 路线从会话记录定位启动目录，拿不到路径时按会话 ID 兜底；启动信息未知时，仓库内的规则和结论仍可用。Codex 主 agent 会在新任务消息里带上相同要求。子 agent 在缺少仓库地图时存一条，引用前复核 file:line，交付前跑相关检查，回复附上保存的条目 ID 和“建议记住”。主 agent 负责记忆写入、总结、结论核实和任务间的消息转发。
+子 agent 按 `codex-executor` 技能工作，这个技能只在收到主 agent 派来的任务时加载；派单说明会点名它，非 Codex 执行器拿到它的路径自行读取。子 agent 开始排查或实现前，先运行 `context.sh rules` 并读它列出的规则文件和记忆索引，再用 `find` 查相关结论。Claude 路线从会话记录定位启动目录，拿不到路径时按会话 ID 兜底；启动信息未知时，仓库内的规则和结论仍可用。Codex 主 agent 在新任务消息里点名同一个技能。子 agent 在缺少仓库地图时存一条，引用前复核 file:line，交付前跑相关检查，回复附上保存的条目 ID 和“建议记住”。主 agent 负责记忆写入、总结、结论核实和任务间的消息转发。
 
 结论是一条一个 Markdown 文件，放在 `<git-common-dir>/agent-context/entries/`，同一仓库的 worktree 共用，位于跟踪文件之外。条目记录 commit、文件 blob 和来源线程；文件修改或缺失时，`find` 和 `show` 标出“可能过期”。新条目默认 `unverified`，主 agent 核对证据后核实或撤回；核实只改状态，保留原始文件 hash。
 
@@ -107,7 +108,7 @@ cd code-director
 ./install.sh
 ```
 
-脚本把 `~/.claude/skills/code-director` 软链到这个 checkout，之后的修改和 `git pull` 不用重装就生效，并删除旧版本留下的转发 agent。它还会把 Codex 插件的五个派单工具（`mcp__codex__dispatch`、`message`、`answer`、`result`、`status`）加进 `~/.claude/settings.json` 的 `permissions.allow`，调用时不再弹权限提示；文件里的其他内容保持不变，已经有这些规则时不做任何改动，文件不是合法 JSON 时也不碰它。checkout 不要移动或删除，否则软链会失效。然后按 `docs/claude-md-snippet.md` 把路由规则加到 `~/.claude/CLAUDE.md`，在 Claude Code 里执行 `/reload-plugins` 或重开会话。
+脚本把 `~/.claude/skills/code-director` 和派出任务要用的 `${CODEX_HOME:-$HOME/.codex}/skills/codex-executor` 软链到这个 checkout，之后的修改和 `git pull` 不用重装就生效，并删除旧版本留下的转发 agent。它还会把 Codex 插件的五个派单工具（`mcp__codex__dispatch`、`message`、`answer`、`result`、`status`）加进 `~/.claude/settings.json` 的 `permissions.allow`，调用时不再弹权限提示；文件里的其他内容保持不变，已经有这些规则时不做任何改动，文件不是合法 JSON 时也不碰它。checkout 不要移动或删除，否则软链会失效。然后按 `docs/claude-md-snippet.md` 把路由规则加到 `~/.claude/CLAUDE.md`，在 Claude Code 里执行 `/reload-plugins` 或重开会话。
 
 ## 使用
 
