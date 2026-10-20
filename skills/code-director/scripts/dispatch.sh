@@ -83,11 +83,11 @@ EOF
   # neither, and naming them would send it looking for tools it does not have.
   if [ -z "$EXECUTOR" ] || [ "$EXECUTOR" = codex ]; then
     cat <<'EOF'
-- When you need a decision, missing information, or authorization, call request_user_input. The director answers it.
+- When you need a decision, missing information, or authorization, call request_user_input. The director answers it from the question alone, without your trace: write the question as a short paragraph with where you are, what you found (file:line), why it blocks you, and what you will do meanwhile, and give each option its consequence, recommended first. The tool's "single sentence" hint does not apply here.
 EOF
   else
     cat <<'EOF'
-- When you need a decision, missing information, or authorization, ask for it however this agent asks the user. The director answers it.
+- When you need a decision, missing information, or authorization, ask for it however this agent asks the user. The director answers it from the question alone, without your trace: say where you are, what you found (file:line), why it blocks you, the options with their consequences (recommended first), and what you will do meanwhile.
 EOF
   fi
   if { [ -z "$EXECUTOR" ] || [ "$EXECUTOR" = codex ]; } && grep -rq 'notify_director' "$(dirname "$CC")"; then

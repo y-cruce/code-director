@@ -84,7 +84,7 @@ Nothing blocks on a job. The Monitor prints one line when a job produces an even
 
 - `DONE` / `job.completed`: run `node "$(bash ~/.claude/skills/code-director/scripts/dispatch.sh companion)" result <job-id> --cwd <repo>` in a foreground Bash call and judge the output as usual. A review's `DONE` line ends with `report=<path>`: read that Markdown file with the Read tool instead; it holds the review's full conclusions.
 - `FAILED` / `job.failed` / `job.cancelled`: report the reason to the user.
-- `QUESTION` / `question.opened`: the line names the request and the question ids (`request=<id> ids=...`); answer them (below), reading `status <job-id> --cwd <repo> --json` first only when you need the full questions or their options. The job stays alive, waiting.
+- `QUESTION` / `question.opened`: the line names the request and the question ids (`request=<id> ids=...`) and, from plugin 1.4.55, carries every question in full with its options and their consequences (`[id] question Options: label (consequence); ...`, several questions separated by ` | `). Answer from the line (below); read `status <job-id> --cwd <repo> --json` only on an older plugin or when the line ends cut with `…`. The job stays alive, waiting.
 - `NOTIFIED` / `director.notified`: a one-line note from Codex while it keeps working: something you must act on, or something to relay to another running task. The job never paused.
 - `STALLED`: the job has produced no progress for fifteen minutes. Inspect `status <job-id>`; the event does not mark the job failed.
 
@@ -193,7 +193,7 @@ For direct Bash delivery, use `bash ~/.claude/skills/code-director/scripts/dispa
 
 Use `/codex:message <job-id> --interrupt <text>` when the current approach must stop. It cancels the turn and continues the same job and thread with the new instruction, retaining its original write permission. Report the returned partial changes; interruption does not undo files. Do not use this to escalate a read-only task's permissions.
 
-On `STATUS: waiting-for-answer`, the Codex job remains running. Read the returned questions. Answer from already established facts, or ask the user when a choice or authorization is missing. Never infer permission from a factual answer. Then:
+On `STATUS: waiting-for-answer`, the Codex job remains running. Read the returned questions. Answer from already established facts, or ask the user when a choice or authorization is missing. Never infer permission from a factual answer. When the question does not give you enough to decide, do not guess and do not pass a half-understood choice to the user: answer with free text (any answer outside the offered options is accepted) naming exactly what Codex must add, and it asks again with that context. Then:
 
 1. Take the request id and question ids from the question line itself: it carries `request=<id> ids=<id>,<id>` (from plugin 1.4.50). Without `ids=` on the line (an older plugin), read them from `status --json`: `job.live.questions[]` lists each pending request with its `requestId` and `questions[]`, and every question has an `id`. Those ids are the only valid keys of the answers file; never make a key up, copy one from an example, or send a placeholder key to learn the ids from the error.
 2. Write the answers file as a JSON map keyed by those ids: `{"<question-id>":{"answers":["<answer text>"]},...}`, one entry per question of the request, each with a nonempty array of nonempty strings. The broker rejects the whole request if any key is missing or unknown.
