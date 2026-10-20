@@ -92,11 +92,11 @@ EOF
   fi
   if { [ -z "$EXECUTOR" ] || [ "$EXECUTOR" = codex ]; } && grep -rq 'notify_director' "$(dirname "$CC")"; then
     cat <<'EOF'
-- notify_director(message) sends a one-line note to the director without stopping your work. Use it only when you reach a conclusion that changes the plan (root cause found, scope larger than briefed, a blocker you are working around) or finish a phase the director could act on while you continue. Do not report routine progress. The director does not reply through this tool.
+- notify_director(message) sends a one-line note to the director without stopping your work. Use it only when the director must act while you keep working (a blocker it has to clear, a decision or scope change it must approve, a finding that makes the brief wrong), or when another running task needs something you learned and the director has to relay it. Never send progress, finished steps, or findings that only feed your final answer; the director runs many tasks and every note costs its context. The director does not reply through this tool.
 EOF
   fi
   cat <<EOF
-- Other tasks started by the same director may be running in this workspace. Do not coordinate with them yourself; tell the director what they need to know in your final message.
+- Other tasks started by the same director may be running in this workspace. Do not coordinate with them yourself; tell the director what they need to know (through notify_director while they may still need it, otherwise in your final message).
 - Work only in the assigned CWD. The director owns worktree creation and cleanup. APFS clones have independent files but may retain symlinks or absolute paths into another checkout: check those before builds, keep outputs local, and never replace isolation with hard links or shared writable dependencies. Do not copy a worktree's .git file or delete another task's directory. Submodules have independent Git state at the parent's pinned commits; commit submodule edits before updating the parent gitlink, and report any submodule commits that must be preserved before cleanup. Report the branch, commit and any remaining files the director must preserve when you finish.
 EOF
   cat <<'EOF'

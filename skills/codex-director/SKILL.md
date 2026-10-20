@@ -89,7 +89,7 @@ If separate directories are unnecessary, serialize writes in the shared checkout
 
 Use the returned agent ID or canonical task name as `target`. Resume an idle agent with `followup_task`; sending a message alone will not make it work. For a change that must stop current execution, interrupt first, inspect its state and partial changes, then send the replacement task through `followup_task`.
 
-Keep working on independent parts after dispatch. Read incoming questions, progress messages, and final answers; do not repeatedly poll. If waiting, use bounded waits of at most 60 seconds and keep the user informed when progress or the plan changes. A wait timeout is not a failure. After 15 minutes without progress, inspect live status and ask the agent for a concrete progress/blocker report; do not duplicate its task just because it is slow.
+Keep working on independent parts after dispatch. Read incoming questions, notes that need action or relaying, and final answers; executors are told not to send progress, so do not ask for it and do not repeatedly poll. If waiting, use bounded waits of at most 60 seconds and keep the user informed when progress or the plan changes. A wait timeout is not a failure. After 15 minutes without progress, inspect live status and ask the agent for a concrete progress/blocker report; do not duplicate its task just because it is slow.
 
 Answer questions using the user's existing requirements and authorization. Ask the user only when a material decision or permission is genuinely missing, while continuing independent work. Forward cross-task facts through the parent so every agent has a consistent scope.
 
