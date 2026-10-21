@@ -51,6 +51,7 @@ All dispatch logic lives in `~/.claude/skills/code-director/scripts/dispatch.sh`
 | `mcp__codex__answer` (`job`, `cwd`, `request`, `answers` as the JSON map) | writing an answers file and running `dispatch.sh answer` |
 | `mcp__codex__result` (`job`, `cwd`) | `node "$(… dispatch.sh companion)" result <job-id> --cwd <repo>` |
 | `mcp__codex__status` (`cwd`, optional `job`, optional `detail`) | `status [<job-id>] --cwd <repo> --brief` on the companion; `detail: true` is `--json` |
+| `mcp__codex__cancel` (`job`, `cwd`) | `cancel <job-id> --cwd <repo>` on the companion. TaskStop cannot stop a Codex job |
 
 A failed call comes back as a tool error carrying the script's own line (`NAME_REQUIRED`, `MESSAGE_FAILED …`, `ANSWER_FAILED …`), read the same way as below. Everything else in this skill (worktrees, `pane`, `follow`, `events`) stays a Bash call.
 

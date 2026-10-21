@@ -20,14 +20,14 @@ chmod +x "$HERE/skills/code-director/scripts/dispatch.sh"
 
 # The Codex plugin (1.4.48+) gives the director dispatch tools of its own. They
 # run what the skill would otherwise run from Bash, so they are allowed in the
-# user's settings once instead of asked about at every call. The five names are
+# user's settings once instead of asked about at every call. The names are
 # spelled out: `mcp__codex__*` would also cover a Codex MCP server named codex.
 SETTINGS="$DEST/settings.json"
 node - "$SETTINGS" <<'NODE'
 const fs = require("node:fs");
 const path = require("node:path");
 const file = process.argv[2];
-const rules = ["dispatch", "message", "answer", "result", "status"].map(name => `mcp__codex__${name}`);
+const rules = ["dispatch", "message", "answer", "result", "status", "cancel"].map(name => `mcp__codex__${name}`);
 let settings = {};
 if (fs.existsSync(file)) {
   try { settings = JSON.parse(fs.readFileSync(file, "utf8")); }
