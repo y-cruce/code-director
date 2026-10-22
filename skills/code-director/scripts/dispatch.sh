@@ -261,17 +261,17 @@ do_launch() {
         if [ -z "$EXECUTOR_COMMAND" ]; then
           echo "CODEX_FAILED: qoder not found; put it on PATH or set CODEX_DIRECTOR_QODER_COMMAND"; exit 1
         fi
-        CMD+=(--executor acp --executor-command "$EXECUTOR_COMMAND" --executor-args '["--acp"]')
-        # Qoder remembers the model each session ran on and reuses it for the
-        # next one, so a single `MODEL: ultimate` job would quietly put every
-        # later dispatch that names no model on Opus 5. Name the default the
-        # skill documents instead of inheriting whatever ran last. A
-        # continue is left alone: its thread was created on some model, and
-        # switching it mid-thread is not what "no MODEL header" asks for.
-        if [ "$MODE" != continue ] && [ -z "$MODEL" ]; then MODEL=performance; fi
         # Same standing policy as Codex's danger-full-access: a dispatched task
         # must not stall on a permission prompt no human is watching.
-        EXECUTOR_MODE="${EXECUTOR_MODE:-${CODEX_DIRECTOR_EXECUTOR_MODE:-yolo}}" ;;
+        EXECUTOR_MODE="${EXECUTOR_MODE:-${CODEX_DIRECTOR_EXECUTOR_MODE:-yolo}}"
+        # Qoder lists `yolo` but refuses session/set_mode to it (`unknown
+        # permission_mode: yolo`) unless the process was started with bypass
+        # permissions allowed.
+        if [ "$EXECUTOR_MODE" = yolo ]; then
+          CMD+=(--executor acp --executor-command "$EXECUTOR_COMMAND" --executor-args '["--acp","--permission-mode","bypass_permissions"]')
+        else
+          CMD+=(--executor acp --executor-command "$EXECUTOR_COMMAND" --executor-args '["--acp"]')
+        fi ;;
       acp)
         EXECUTOR_COMMAND="${EXECUTOR_COMMAND:-${CODEX_COMPANION_ACP_COMMAND:-}}"
         if [ -z "$EXECUTOR_COMMAND" ]; then

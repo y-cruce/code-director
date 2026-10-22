@@ -133,7 +133,7 @@ An explicit `EXECUTOR:` or `MODEL:` header is passed through as written; write o
 | `qoder` | qodercli over ACP; the binary is found on PATH, then `~/.qoder/entry/qoder`, or `CODEX_DIRECTOR_QODER_COMMAND` | `EXECUTOR_MODE` (a Qoder session mode, e.g. `yolo`) |
 | `acp` | Any other agent speaking the Agent Client Protocol on stdio | `EXECUTOR_COMMAND` (or `$CODEX_COMPANION_ACP_COMMAND`; one of them is required), `EXECUTOR_ARGS` (a JSON array), `EXECUTOR_MODE` |
 
-On Qoder, `MODEL:` names Qoder's own model (`dfmodel`, `performance`, `ultimate`). The dispatcher always names one for a new task because Qoder otherwise reuses whichever model ran last; `MODE: continue` keeps the model its thread was created on. Qoder runs in its `yolo` permission mode by default, matching the standing policy that a dispatched task never stalls on a prompt no human is watching; `EXECUTOR_MODE:` overrides it.
+On Qoder, `MODEL:` names Qoder's own model (`dfmodel`, `fast`, `ultimate`). Without it a task runs on the default model in Qoder's own settings; `MODE: continue` keeps the model its thread was created on. Qoder runs in its `yolo` permission mode by default, matching the standing policy that a dispatched task never stalls on a prompt no human is watching; `EXECUTOR_MODE:` overrides it.
 
 What you lose when the executor is not Codex:
 

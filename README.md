@@ -158,7 +158,7 @@ NAME: worker answer subcommand
 | `qoder` | qodercli over ACP; the binary is found on PATH, then `~/.qoder/entry/qoder`, or `CODEX_DIRECTOR_QODER_COMMAND` | `EXECUTOR_MODE` (a Qoder session mode, e.g. `yolo`) |
 | `acp` | Any other agent speaking the Agent Client Protocol on stdio | `EXECUTOR_COMMAND` (required), `EXECUTOR_ARGS` (a JSON array), `EXECUTOR_MODE` |
 
-`MODEL` names the executor's own model; `MODEL: luna` is the one name that works on both: `gpt-6-luna` at `max` effort on Codex, `dfmodel` on Qoder. A new Qoder task without `MODEL` runs `performance`, because Qoder otherwise reuses whichever model ran last. Qoder runs in its `yolo` permission mode unless `EXECUTOR_MODE` says otherwise, so a dispatched task never stalls on a prompt no human is watching.
+`MODEL` names the executor's own model; `MODEL: luna` is the one name that works on both: `gpt-6-luna` at `max` effort on Codex, `dfmodel` on Qoder. A Qoder task without `MODEL` runs on the default model in Qoder's own settings. Qoder runs in its `yolo` permission mode unless `EXECUTOR_MODE` says otherwise, so a dispatched task never stalls on a prompt no human is watching.
 
 `review` and `adversarial-review` stay Codex-only; the worker refuses them with another executor. A non-Codex agent has no `request_user_input` or `notify_director`, so the director note leaves both out for it.
 

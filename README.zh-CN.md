@@ -158,7 +158,7 @@ NAME: worker 回答子命令
 | `qoder` | 走 ACP 的 qodercli；二进制按 PATH、`~/.qoder/entry/qoder`、`CODEX_DIRECTOR_QODER_COMMAND` 的顺序找 | `EXECUTOR_MODE`（Qoder 的会话模式，例如 `yolo`） |
 | `acp` | 任何在 stdio 上说 Agent Client Protocol 的 agent | `EXECUTOR_COMMAND`（必填）、`EXECUTOR_ARGS`（JSON 数组）、`EXECUTOR_MODE` |
 
-`MODEL` 指的是执行器自己的模型；`MODEL: luna` 两边通用：Codex 上是 `gpt-6-luna`（推理强度 `max`），Qoder 上是 `dfmodel`。新的 Qoder 任务不写 `MODEL` 时跑 `performance`，因为 Qoder 默认沿用上一次用过的模型。Qoder 默认跑在 `yolo` 权限模式，除非 `EXECUTOR_MODE` 另行指定——派出去的任务背后没人盯着，不能卡在权限确认上。
+`MODEL` 指的是执行器自己的模型；`MODEL: luna` 两边通用：Codex 上是 `gpt-6-luna`（推理强度 `max`），Qoder 上是 `dfmodel`。Qoder 任务不写 `MODEL` 时用 Qoder 自己设置里的默认模型。Qoder 默认跑在 `yolo` 权限模式，除非 `EXECUTOR_MODE` 另行指定——派出去的任务背后没人盯着，不能卡在权限确认上。
 
 `review` 和 `adversarial-review` 仍是 Codex 独有，配别的执行器会被拒绝。非 Codex 的 agent 没有 `request_user_input` 和 `notify_director`，任务书说明里不会提这两个工具。
 
