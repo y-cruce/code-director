@@ -27,7 +27,7 @@ node - "$SETTINGS" <<'NODE'
 const fs = require("node:fs");
 const path = require("node:path");
 const file = process.argv[2];
-const rules = ["dispatch", "message", "answer", "result", "status", "cancel"].map(name => `mcp__codex__${name}`);
+const rules = ["dispatch", "message", "answer", "result", "status", "tasks", "cancel"].map(name => `mcp__codex__${name}`);
 let settings = {};
 if (fs.existsSync(file)) {
   try { settings = JSON.parse(fs.readFileSync(file, "utf8")); }

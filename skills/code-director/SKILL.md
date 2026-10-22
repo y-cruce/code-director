@@ -51,7 +51,10 @@ All dispatch logic lives in `~/.claude/skills/code-director/scripts/dispatch.sh`
 | `mcp__codex__answer` (`job`, `cwd`, `request`, `answers` as the JSON map) | writing an answers file and running `dispatch.sh answer` |
 | `mcp__codex__result` (`job`, `cwd`) | `node "$(… dispatch.sh companion)" result <job-id> --cwd <repo>` |
 | `mcp__codex__status` (`cwd`, optional `job`, optional `detail`) | `status [<job-id>] --cwd <repo> --brief` on the companion; `detail: true` is `--json` |
+| `mcp__codex__tasks` (optional `query`, `cwd`, `all`, `limit`) | a compact thread list across repositories; defaults to this Claude session, newest 20 first |
 | `mcp__codex__cancel` (`job`, `cwd`) | `cancel <job-id> --cwd <repo>` on the companion. TaskStop cannot stop a Codex job |
+
+Use `mcp__codex__tasks` to find a thread to continue or check what this session has running. Each thread appears once with its name, thread id (`pending` until known), executor, status, latest job and repository; queued follow-up rounds share that line. `query` is a case-insensitive name substring, `cwd` limits the repository, `limit` accepts 1–100 (default 20), and `all: true` includes other sessions with an `other session=<id>` marker. A final line counts older matches that were not shown.
 
 A failed call comes back as a tool error carrying the script's own line (`NAME_REQUIRED`, `MESSAGE_FAILED …`, `ANSWER_FAILED …`), read the same way as below. Everything else in this skill (worktrees, `pane`, `follow`, `events`) stays a Bash call.
 

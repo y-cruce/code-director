@@ -108,7 +108,7 @@ cd code-director
 ./install.sh
 ```
 
-脚本把 `~/.claude/skills/code-director` 和派出任务要用的 `${CODEX_HOME:-$HOME/.codex}/skills/codex-executor` 软链到这个 checkout，之后的修改和 `git pull` 不用重装就生效，并删除旧版本留下的转发 agent。它还会把 Codex 插件的派单工具（`mcp__codex__dispatch`、`message`、`answer`、`result`、`status`、`cancel`）加进 `~/.claude/settings.json` 的 `permissions.allow`，调用时不再弹权限提示；文件里的其他内容保持不变，已经有这些规则时不做任何改动，文件不是合法 JSON 时也不碰它。checkout 不要移动或删除，否则软链会失效。然后按 `docs/claude-md-snippet.md` 把路由规则加到 `~/.claude/CLAUDE.md`，在 Claude Code 里执行 `/reload-plugins` 或重开会话。
+脚本把 `~/.claude/skills/code-director` 和派出任务要用的 `${CODEX_HOME:-$HOME/.codex}/skills/codex-executor` 软链到这个 checkout，之后的修改和 `git pull` 不用重装就生效，并删除旧版本留下的转发 agent。它还会把 Codex 插件的派单工具（`mcp__codex__dispatch`、`message`、`answer`、`result`、`status`、`tasks`、`cancel`）加进 `~/.claude/settings.json` 的 `permissions.allow`，调用时不再弹权限提示；文件里的其他内容保持不变，已经有这些规则时不做任何改动，文件不是合法 JSON 时也不碰它。checkout 不要移动或删除，否则软链会失效。然后按 `docs/claude-md-snippet.md` 把路由规则加到 `~/.claude/CLAUDE.md`，在 Claude Code 里执行 `/reload-plugins` 或重开会话。
 
 ## 使用
 
@@ -121,6 +121,8 @@ review 一下这个分支的改动
 ```
 
 Claude 会加载 code-director，写任务书，派出去，处理任务面板报上来的事件，抽查，汇报。你也可以直接点名：「用 codex 查一下 X」。
+
+插件提供 `mcp__codex__tasks`，Claude 可以一次调用查找要继续的线程，或查看本会话正在运行的任务。它默认跨仓库列出本会话派出的线程，从新到旧显示名称、线程 ID（尚未获得时为 `pending`）、执行器、状态、最新 job 和仓库路径；排队的后续轮次合并到同一线程。可选 `query` 按名称筛选且忽略大小写，`cwd` 限定仓库，`limit` 设置条数（默认 20，范围 1–100），`all: true` 包含其他会话并标出会话 ID，末尾提示未显示的较早匹配数量。
 
 ### 任务书格式
 

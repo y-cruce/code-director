@@ -108,7 +108,7 @@ cd code-director
 ./install.sh
 ```
 
-The script links `~/.claude/skills/code-director`, and `${CODEX_HOME:-$HOME/.codex}/skills/codex-executor` for the dispatched tasks, to this checkout, so later edits and `git pull` take effect without reinstalling, and removes forwarding agents left by older versions. It also adds the Codex plugin's dispatch tools (`mcp__codex__dispatch`, `message`, `answer`, `result`, `status`, `cancel`) to `permissions.allow` in `~/.claude/settings.json`, so they run without a prompt; it keeps everything else in the file, does nothing if the rules are already there, and leaves a file that is not valid JSON untouched. Keep the checkout where it is; moving or deleting it breaks the link. Then append the snippet from `docs/claude-md-snippet.md` to `~/.claude/CLAUDE.md` and run `/reload-plugins` in Claude Code, or start a new session.
+The script links `~/.claude/skills/code-director`, and `${CODEX_HOME:-$HOME/.codex}/skills/codex-executor` for the dispatched tasks, to this checkout, so later edits and `git pull` take effect without reinstalling, and removes forwarding agents left by older versions. It also adds the Codex plugin's dispatch tools (`mcp__codex__dispatch`, `message`, `answer`, `result`, `status`, `tasks`, `cancel`) to `permissions.allow` in `~/.claude/settings.json`, so they run without a prompt; it keeps everything else in the file, does nothing if the rules are already there, and leaves a file that is not valid JSON untouched. Keep the checkout where it is; moving or deleting it breaks the link. Then append the snippet from `docs/claude-md-snippet.md` to `~/.claude/CLAUDE.md` and run `/reload-plugins` in Claude Code, or start a new session.
 
 ## Usage
 
@@ -121,6 +121,8 @@ Review the changes on this branch
 ```
 
 Claude loads code-director, writes a brief, dispatches it, acts on the events the tasks pane raises, spot-checks, and reports. You can also name it directly: "ask codex to look into X".
+
+With the plugin's `mcp__codex__tasks` tool, Claude can find a thread to continue or check what this session has running in one call. It lists this session's threads across repositories, newest first, with the name, thread id (`pending` until known), executor, status, latest job and repository. Queued follow-up rounds share one line with their thread. Optional `query` filters names without regard to case, `cwd` limits the repository, `limit` sets the cap (default 20, range 1–100), and `all: true` includes other sessions with their session ids marked. Older matches are counted at the end.
 
 ### Brief format
 
