@@ -15,7 +15,10 @@ test("DSH dispatch starts and continues the ACP session without Qoder modes or m
   const recording = path.join(cwd, "args.json");
   fs.writeFileSync(companion, `import fs from "node:fs";
 // Capability markers: executor-command "executor-permissions" "label" "thread" danger-full-access case "message":
-if (process.argv[2] === "status") console.log(JSON.stringify({ job: { id: "task-test", status: "running", threadId: "session-test" } }));
+if (process.argv[2] === "status") {
+  if (JSON.parse(fs.readFileSync(process.env.RECORDING, "utf8")).includes("--thread")) process.exit(1);
+  console.log(JSON.stringify({ job: { id: "task-test", status: "running", threadId: "session-test" } }));
+}
 else {
   if (process.env.CODEX_COMPANION_ACP_MODE || process.env.CODEX_COMPANION_ACP_MODEL) throw new Error("DSH inherited a generic ACP mode/model");
   fs.writeFileSync(process.env.RECORDING, JSON.stringify(process.argv.slice(2))); console.log(JSON.stringify({ jobId: "task-test" }));

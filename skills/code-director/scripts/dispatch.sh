@@ -171,6 +171,7 @@ do_launch() {
   printf '%s\n' "$CC" > "$WORK/companion"
   printf '%s\n' "$CWD" > "$WORK/cwd"
   printf '%s\n' "$NAME" > "$WORK/name"
+  if [ "$MODE" = continue ]; then printf '%s\n' "$THREAD" > "$WORK/thread"; fi
 
   # Settled before the note is written: director_note tells the agent which
   # tools it has, and a default coming from the environment would otherwise
@@ -386,6 +387,7 @@ import json, pathlib, subprocess, sys, time
 work = pathlib.Path(sys.argv[1])
 cc, job_id, cwd = [(work / name).read_text().strip() for name in ("companion", "job", "cwd")]
 name = (work / "name").read_text().rstrip("\n") if (work / "name").exists() else ""
+requested_thread = (work / "thread").read_text().strip() if (work / "thread").exists() else ""
 if not job_id:
     print("STATUS: failed\nJOB: \nNAME: " + name + "\nTHREAD: \nERROR: launch returned no job id; dispatch again")
     sys.exit(1)
@@ -396,7 +398,7 @@ while True:
         job = json.loads(raw)["job"]
     except (subprocess.CalledProcessError, ValueError, KeyError):
         # status unavailable: report started as before and let the monitor take over
-        print("STATUS: started\nJOB: " + job_id + "\nNAME: " + name + "\nTHREAD: ")
+        print("STATUS: started\nJOB: " + job_id + "\nNAME: " + name + "\nTHREAD: " + requested_thread)
         sys.exit(0)
     (work / "status.json").write_bytes(raw)
     status = job["status"]
@@ -410,7 +412,7 @@ failed = status not in ("queued", "running", "completed")
 print("STATUS: " + ("failed" if failed else "started"))
 print("JOB: " + job_id)
 print("NAME: " + name)
-print("THREAD: " + (job.get("threadId") or ""))
+print("THREAD: " + (job.get("threadId") or requested_thread))
 if failed:
     error = job.get("errorMessage") or ((job.get("result") or {}).get("error") or {}).get("message")
     if not error:
