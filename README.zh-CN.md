@@ -156,7 +156,10 @@ NAME: worker 回答子命令
 |---|---|---|
 | `codex`（默认） | 走插件 app-server 的 Codex | — |
 | `qoder` | 走 ACP 的 qodercli；二进制按 PATH、`~/.qoder/entry/qoder`、`CODEX_DIRECTOR_QODER_COMMAND` 的顺序找 | `EXECUTOR_MODE`（Qoder 的会话模式，例如 `yolo`） |
+| `dsh` | 走 ACP 的 DeepSeek Harness（`dsh --profile acp`）；用 `EXECUTOR_COMMAND` 或 `CODEX_DIRECTOR_DSH_COMMAND` 覆盖可执行文件 | `EXECUTOR_ARGS`、`EXECUTOR_PERMISSIONS`（默认 `allow-once`，可改为 `ask`） |
 | `acp` | 任何在 stdio 上说 Agent Client Protocol 的 agent | `EXECUTOR_COMMAND`（必填）、`EXECUTOR_ARGS`（JSON 数组）、`EXECUTOR_MODE` |
+
+DSH 使用持久 ACP 会话。派单写 `EXECUTOR: dsh`；继续对话写 `MODE: continue`、`THREAD: <返回的 session id>`，并保持相同的可执行文件和 profile。一轮结束可以关闭进程，下次派单通过 `session/resume` 恢复模型上下文；插件自行保留事件历史。`message --queue` 等当前 prompt 结束，`--interrupt` 先取消再执行新指令。DSH 没有会话模式或在途 steering，默认只选择 `allow_once` 权限；写 `EXECUTOR_PERMISSIONS: ask` 则把选项交给 Director。省略 `MODEL` 时保留 DSH 配置的模型。设 `CODEX_DIRECTOR_EXECUTOR=dsh` 可将它作为默认执行器；dispatch 不安装程序或处理认证。
 
 `MODEL` 指的是执行器自己的模型；`MODEL: luna` 两边通用：Codex 上是 `gpt-6-luna`（推理强度 `max`），Qoder 上是 `dfmodel`。Qoder 任务不写 `MODEL` 时用 Qoder 自己设置里的默认模型。Qoder 默认跑在 `yolo` 权限模式，除非 `EXECUTOR_MODE` 另行指定——派出去的任务背后没人盯着，不能卡在权限确认上。
 

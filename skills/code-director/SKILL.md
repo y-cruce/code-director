@@ -1,6 +1,6 @@
 ---
 name: code-director
-description: A way of working where another coding agent executes and Claude only directs. Load this skill for any task that involves reading code to understand current behavior, finding the root cause of a bug, implementing a change from requirements, reviewing a diff, or getting a second opinion, and whenever the user says "ask codex", "let codex look", "use codex", or names another executor such as qoder. Follow the process to dispatch the work; Claude only writes the brief, judges the result, and makes the calls.
+description: A way of working where another coding agent executes and Claude only directs. Load this skill for any task that involves reading code to understand current behavior, finding the root cause of a bug, implementing a change from requirements, reviewing a diff, or getting a second opinion, and whenever the user says "ask codex", "let codex look", "use codex", or names another executor such as qoder or dsh. Follow the process to dispatch the work; Claude only writes the brief, judges the result, and makes the calls.
 ---
 
 # Code director mode
@@ -43,7 +43,7 @@ If two or more tasks repeat the same mistaken assumption or lack the same prereq
 
 All dispatch logic lives in `~/.claude/skills/code-director/scripts/dispatch.sh` (which Codex command to run, the director note, sandbox flags, review fallbacks).
 
-**With the Codex plugin's tools (1.4.48 or later), one dispatch is one call.** When `mcp__codex__dispatch` is in your tool list, use it and its siblings instead of Bash. Every header below is a field of its own: `mode`, `name` and `cwd` are required, `brief` holds the body, and `thread`, `base`, `write` (true for `WRITE: yes`), `effort`, `model`, `siblings`, `sandbox`, `executor`, `executor_mode` and `executor_effort` are filled only when the rules below call for that header. The tool runs `dispatch.sh dispatch` with the brief on stdin and returns the same lines. Several dispatches go in one message as separate tool calls. The other tools replace the Bash calls named later in this skill:
+**With the Codex plugin's tools (1.4.48 or later), one dispatch is one call.** When `mcp__codex__dispatch` is in your tool list, use it and its siblings instead of Bash. Every header below is a field of its own: `mode`, `name` and `cwd` are required, `brief` holds the body, and `thread`, `base`, `write` (true for `WRITE: yes`), `effort`, `model`, `siblings`, `sandbox`, `executor`, `executor_mode`, `executor_effort`, `executor_command`, `executor_args` (an array of strings) and `executor_permissions` are filled only when the rules below call for that header. The tool runs `dispatch.sh dispatch` with the brief on stdin and returns the same lines. Several dispatches go in one message as separate tool calls. The other tools replace the Bash calls named later in this skill:
 
 | Tool | Replaces |
 |---|---|
@@ -131,9 +131,12 @@ An explicit `EXECUTOR:` or `MODEL:` header is passed through as written; write o
 |---|---|---|
 | `codex` (default) | Codex through the plugin's app-server | — |
 | `qoder` | qodercli over ACP; the binary is found on PATH, then `~/.qoder/entry/qoder`, or `CODEX_DIRECTOR_QODER_COMMAND` | `EXECUTOR_MODE` (a Qoder session mode, e.g. `yolo`) |
+| `dsh` | DeepSeek Harness over ACP (`dsh --profile acp`); executable from `EXECUTOR_COMMAND`, `$CODEX_DIRECTOR_DSH_COMMAND`, then PATH | `EXECUTOR_ARGS` (override the launch arguments), `EXECUTOR_PERMISSIONS` (`allow-once` or `ask`) |
 | `acp` | Any other agent speaking the Agent Client Protocol on stdio | `EXECUTOR_COMMAND` (or `$CODEX_COMPANION_ACP_COMMAND`; one of them is required), `EXECUTOR_ARGS` (a JSON array), `EXECUTOR_MODE` |
 
 On Qoder, `MODEL:` names Qoder's own model (`dfmodel`, `fast`, `ultimate`). Without it a task runs on the default model in Qoder's own settings; `MODE: continue` keeps the model its thread was created on. Qoder runs in its `yolo` permission mode by default, matching the standing policy that a dispatched task never stalls on a prompt no human is watching; `EXECUTOR_MODE:` overrides it.
+
+On DSH, leave `MODEL` out to keep its configured model; an explicit value must be an advertised ACP model id. DSH has no session modes: do not send `EXECUTOR_MODE`. Its default `EXECUTOR_PERMISSIONS: allow-once` selects only the offered one-shot allow option; `ask` forwards permission choices to you. Start with `EXECUTOR: dsh`, continue with `MODE: continue`, the returned `THREAD`, and the same command/profile. The worker owns its stdio independently of the foreground dispatch. When a round and its queue finish, that process closes; the next dispatch restores the same conversation through `session/resume`. The plugin replays its own saved events because DSH resume does not replay old notifications. Use `message --queue` or `--interrupt`; DSH does not accept a second in-flight prompt or mid-turn steering.
 
 What you lose when the executor is not Codex:
 
@@ -192,7 +195,7 @@ Everything reaches a running job through the worker, in a Bash call of your own:
 |---|---|
 | Stop the current approach now, on either executor | `dispatch.sh message <job-id> <prompt-file> --cwd <repo> --interrupt` |
 | A correction that can wait for this round to end, on either executor | The same with `--queue`: the message is delivered as the next turn once the current one finishes, and the agent keeps the work it was doing |
-| A correction Codex should read without stopping | The same with no flag; it lands at Codex's next model request. An ACP agent (qoder) reports `midTurnSteer: false` and refuses a plain message -- use `--queue` there |
+| A correction Codex should read without stopping | The same with no flag; it lands at Codex's next model request. An ACP agent (qoder or dsh) reports `midTurnSteer: false` and refuses a plain message -- use `--queue` there |
 | End the job now | `cancel <job-id>` on the selected companion |
 | Answer a structured question | `answer` with the request id and exact question ids |
 | Start a new round on the same problem | Dispatch `MODE: continue` with `THREAD:` |

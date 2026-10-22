@@ -156,7 +156,10 @@ NAME: worker answer subcommand
 |---|---|---|
 | `codex` (default) | Codex through the plugin's app-server | — |
 | `qoder` | qodercli over ACP; the binary is found on PATH, then `~/.qoder/entry/qoder`, or `CODEX_DIRECTOR_QODER_COMMAND` | `EXECUTOR_MODE` (a Qoder session mode, e.g. `yolo`) |
+| `dsh` | DeepSeek Harness over ACP (`dsh --profile acp`); override its executable with `EXECUTOR_COMMAND` or `CODEX_DIRECTOR_DSH_COMMAND` | `EXECUTOR_ARGS`, `EXECUTOR_PERMISSIONS` (`allow-once` by default, or `ask`) |
 | `acp` | Any other agent speaking the Agent Client Protocol on stdio | `EXECUTOR_COMMAND` (required), `EXECUTOR_ARGS` (a JSON array), `EXECUTOR_MODE` |
+
+DSH uses persistent ACP sessions. Dispatch with `EXECUTOR: dsh`; continue with `MODE: continue`, `THREAD: <the returned session id>` and the same executor command/profile. A finished round can close its process: the next dispatch restores model context with `session/resume`, while the plugin keeps the event history. `message --queue` waits for the current prompt; `--interrupt` cancels it before starting a replacement. DSH has no session modes or mid-turn steering. Its default permission policy selects only `allow_once`; `EXECUTOR_PERMISSIONS: ask` forwards the offered choices to the director. An omitted `MODEL` keeps DSH's configured model. Set `CODEX_DIRECTOR_EXECUTOR=dsh` to choose it by default; no installation or authentication is performed by dispatch.
 
 `MODEL` names the executor's own model; `MODEL: luna` is the one name that works on both: `gpt-6-luna` at `max` effort on Codex, `dfmodel` on Qoder. A Qoder task without `MODEL` runs on the default model in Qoder's own settings. Qoder runs in its `yolo` permission mode unless `EXECUTOR_MODE` says otherwise, so a dispatched task never stalls on a prompt no human is watching.
 

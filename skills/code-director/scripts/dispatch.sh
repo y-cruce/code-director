@@ -28,7 +28,7 @@
 # Headers: NAME (required task name), MODE (investigate|implement|review|adversarial-review|continue), EFFORT, MODEL, BASE, WRITE, THREAD,
 # SIBLINGS, CWD, SANDBOX (full = no sandbox, the default for every task; network = workspace-write plus network
 # access; default = the plugin's own read-only / workspace-write choice),
-# EXECUTOR (codex | qoder | acp) with EXECUTOR_COMMAND, EXECUTOR_ARGS (JSON array), EXECUTOR_MODE, EXECUTOR_EFFORT and MODEL for a
+# EXECUTOR (codex | qoder | dsh | acp) with EXECUTOR_COMMAND, EXECUTOR_ARGS (JSON array), EXECUTOR_MODE, EXECUTOR_PERMISSIONS, EXECUTOR_EFFORT and MODEL for a
 # non-Codex agent (MODEL: luna maps to gpt-6-luna on Codex and dfmodel on qoder); task-class modes only. Without the header the default is $CODEX_DIRECTOR_EXECUTOR, else codex,
 # and qoder runs in its `yolo` permission mode unless EXECUTOR_MODE or $CODEX_DIRECTOR_EXECUTOR_MODE says otherwise.
 set -uo pipefail
@@ -55,13 +55,13 @@ select_companion() {
 # Reads $1 (the input file). Sets the header variables and writes the body to $WORK/brief.md.
 parse_input() {
   local line key val in_header=1
-  NAME=""; MODE=""; EFFORT=""; MODEL=""; BASE=""; WRITE=""; THREAD=""; SIBLINGS=""; CWD=""; SANDBOX=""; EXECUTOR=""; EXECUTOR_MODE=""; EXECUTOR_EFFORT=""; EXECUTOR_COMMAND=""; EXECUTOR_ARGS=""
+  NAME=""; MODE=""; EFFORT=""; MODEL=""; BASE=""; WRITE=""; THREAD=""; SIBLINGS=""; CWD=""; SANDBOX=""; EXECUTOR=""; EXECUTOR_MODE=""; EXECUTOR_PERMISSIONS=""; EXECUTOR_EFFORT=""; EXECUTOR_COMMAND=""; EXECUTOR_ARGS=""
   : > "$WORK/brief.md"
   while IFS= read -r line || [ -n "$line" ]; do
     if [ "$in_header" = 1 ]; then
       if [ -z "$line" ]; then in_header=0; continue; fi
       case "$line" in
-        NAME:*|MODE:*|EFFORT:*|MODEL:*|BASE:*|WRITE:*|THREAD:*|SIBLINGS:*|CWD:*|SANDBOX:*|EXECUTOR:*|EXECUTOR_MODE:*|EXECUTOR_EFFORT:*|EXECUTOR_COMMAND:*|EXECUTOR_ARGS:*)
+        NAME:*|MODE:*|EFFORT:*|MODEL:*|BASE:*|WRITE:*|THREAD:*|SIBLINGS:*|CWD:*|SANDBOX:*|EXECUTOR:*|EXECUTOR_MODE:*|EXECUTOR_PERMISSIONS:*|EXECUTOR_EFFORT:*|EXECUTOR_COMMAND:*|EXECUTOR_ARGS:*)
           key=${line%%:*}; val=${line#*:}; val=${val#"${val%%[![:space:]]*}"}
           printf -v "$key" '%s' "$val" ;;
         *) in_header=0; printf '%s\n' "$line" >> "$WORK/brief.md" ;;
@@ -232,8 +232,8 @@ do_launch() {
   [ -n "$MODEL" ] && [ "$EXECUTOR" = codex ] && CMD+=(--model "$MODEL")
 
   # EXECUTOR picks which agent runs the task. `codex` (the default) keeps every
-  # existing flag; `qoder` runs qodercli over ACP, and `acp` is any other ACP
-  # agent, which then needs EXECUTOR_COMMAND.
+  # existing flag; `qoder` and `dsh` select ACP launch presets, and `acp` is
+  # any other ACP agent, which then needs EXECUTOR_COMMAND.
   if [ "$EXECUTOR" = codex ] && [ "${CMD[2]:-}" = task ] && grep -q 'executor-command' "$CC"; then
     # Named rather than left to the companion's default, which reads
     # $CODEX_COMPANION_EXECUTOR: an inherited value would otherwise quietly
@@ -272,6 +272,21 @@ do_launch() {
         else
           CMD+=(--executor acp --executor-command "$EXECUTOR_COMMAND" --executor-args '["--acp"]')
         fi ;;
+      dsh)
+        EXECUTOR_COMMAND="${EXECUTOR_COMMAND:-${CODEX_DIRECTOR_DSH_COMMAND:-}}"
+        [ -z "$EXECUTOR_COMMAND" ] && EXECUTOR_COMMAND=$(command -v dsh || true)
+        if [ -z "$EXECUTOR_COMMAND" ]; then
+          echo "CODEX_FAILED: dsh not found; put it on PATH or set CODEX_DIRECTOR_DSH_COMMAND"; exit 1
+        fi
+        if [ -n "$EXECUTOR_MODE" ]; then
+          echo "CODEX_FAILED: dsh ACP has no session modes; use EXECUTOR_PERMISSIONS: ask or allow-once"; exit 1
+        fi
+        # Generic ACP defaults may name Qoder modes/models. DSH has no modes
+        # and keeps its own configured model unless the brief names MODEL.
+        unset CODEX_COMPANION_ACP_MODE CODEX_COMPANION_ACP_MODEL
+        CMD+=(--executor acp --executor-command "$EXECUTOR_COMMAND" --executor-args "${EXECUTOR_ARGS:-[\"--profile\",\"acp\"]}")
+        # DSH exposes one-shot permissions, not Qoder's yolo session mode.
+        EXECUTOR_PERMISSIONS="${EXECUTOR_PERMISSIONS:-allow-once}" ;;
       acp)
         EXECUTOR_COMMAND="${EXECUTOR_COMMAND:-${CODEX_COMPANION_ACP_COMMAND:-}}"
         if [ -z "$EXECUTOR_COMMAND" ]; then
@@ -282,9 +297,15 @@ do_launch() {
         # Mode ids are the agent's own, so an unknown agent gets no default.
         EXECUTOR_MODE="${EXECUTOR_MODE:-${CODEX_DIRECTOR_EXECUTOR_MODE:-}}" ;;
       *)
-        echo "CODEX_FAILED: EXECUTOR must be 'codex', 'qoder' or 'acp', got '$EXECUTOR'"; exit 1 ;;
+        echo "CODEX_FAILED: EXECUTOR must be 'codex', 'qoder', 'dsh' or 'acp', got '$EXECUTOR'"; exit 1 ;;
     esac
     [ -n "$EXECUTOR_MODE" ] && CMD+=(--executor-mode "$EXECUTOR_MODE")
+    if [ -n "$EXECUTOR_PERMISSIONS" ]; then
+      if ! grep -q '"executor-permissions"' "$CC"; then
+        echo "CODEX_FAILED: this plugin has no --executor-permissions support; update it or point CODEX_COMPANION at the updated checkout"; exit 1
+      fi
+      CMD+=(--executor-permissions "$EXECUTOR_PERMISSIONS")
+    fi
     [ -n "$MODEL" ] && CMD+=(--executor-model "$MODEL")
     # EFFORT is the reasoning budget of a Codex dispatch and means nothing to
     # another agent, so it is not what sets the rung here: EXECUTOR_EFFORT is,
