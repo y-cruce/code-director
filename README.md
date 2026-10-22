@@ -122,7 +122,7 @@ Review the changes on this branch
 
 Claude loads code-director, writes a brief, dispatches it, acts on the events the tasks pane raises, spot-checks, and reports. You can also name it directly: "ask codex to look into X".
 
-With the plugin's `mcp__codex__tasks` tool, Claude can find a thread to continue or check what this session has running in one call. It lists this session's threads across repositories, newest first, with the name, thread id (`pending` until known), executor, status, latest job and repository. Queued follow-up rounds share one line with their thread. Optional `query` filters names without regard to case, `cwd` limits the repository, `limit` sets the cap (default 20, range 1–100), and `all: true` includes other sessions with their session ids marked. Older matches are counted at the end.
+With the plugin's `mcp__codex__tasks` tool, Claude can find a thread to continue or check what this session has running in one call. It lists this session's threads across repositories, newest first, with the name, thread id (`pending` until known), executor, status, latest job and repository. Queued follow-up rounds share one line with their thread. Optional `query` filters names without regard to case, `cwd` limits the repository, `limit` sets the cap (default 20, range 1–100), and `all: true` includes other sessions' tasks created in the last 3 days with their session ids marked. Set `days` to a positive integer to widen that window. This session's threads have no age limit. Older matches are counted at the end. The first listing migrates older unindexed jobs once; later listings read this session's index. Indexes idle for 7 days expire; job records and state directories remain available.
 
 ### Brief format
 
