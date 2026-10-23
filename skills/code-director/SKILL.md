@@ -251,25 +251,27 @@ After judging the result and integrating the chosen commits, stop the task and i
 
 The brief is for Codex, which has none of your conversation context. Write it completely and concretely.
 
+**Write every brief in Chinese**, headings included: task briefs, `continue` rounds, review focus text, live `message` corrections and answers to questions. Header lines (`MODE:`, `NAME:`, `CWD:` …), code identifiers, commands, paths and quoted log lines stay as they are.
+
 ```
-## Goal
-One sentence describing the finished state.
+## 目标
+一句话说明完成后的状态。
 
-## Context
-Key facts from the user's words; known entry files and related modules; what was tried before and why it failed.
+## 背景
+用户原话里的关键事实；已知的入口文件和相关模块；之前试过什么、为什么没成。
 
-## Constraints
-- Things not to touch (config, public interfaces, unrelated files)
-- Style: match surrounding code, minimal change, no incidental refactoring
-- External systems: state one of "read-only, do not call" or "calling is allowed"
+## 约束
+- 不能动的东西（配置、公共接口、无关文件）
+- 风格：贴合周边代码，最小改动，不顺手重构
+- 外部系统：写明「只读，不调用」或「允许调用」
 
-## Acceptance
-- What counts as done: which tests must pass, which command must run, which questions must be answered
-- Output requirements: conclusion + evidence (file:line) + uncertainties listed separately
+## 验收
+- 怎样算完成：哪些测试要通过、哪条命令要跑、哪些问题要回答
+- 输出要求：结论 + 证据（file:line）+ 不确定的地方单独列出
 
-## Known files (optional)
-path/to/a.py  -- entry point
-path/to/b.py  -- suspect
+## 已知文件（可选）
+path/to/a.py  -- 入口
+path/to/b.py  -- 可疑
 ```
 
 ## Standard pipeline (code changes)
