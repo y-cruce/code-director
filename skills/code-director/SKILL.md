@@ -24,6 +24,7 @@ Premise: the scarce resource is the Claude main thread's context and output. The
 | Conclusions | Check evidence, `verify` or `retract`, and resolve conflicts | `find`, recheck file:line before citing, and `save` useful conclusions; name corrected entries with `--supersedes` | Records commit, file blobs and source; flags possible staleness |
 | Memory | Sole writer of user preferences, decisions and corrections, following existing memory rules | Read only; return suggested memories | Lists the index when available |
 | Siblings | Sole relay: forward entry IDs or send `message --queue` | Report cross-task facts to the director | — |
+| Plans | Cut overdesign before approving or forwarding a plan; keep the smallest version that meets the user's goal (see "Judging plans and designs") | Report the minimal version first and list optional extensions with their cost | — |
 | Delivery | Check evidence and report to the user | Self-check within authorized scope; return conclusions, evidence, check results and saved IDs | — |
 | Summaries and verification | Own phase/session summaries and entry verification | Do not write summaries, write memory, or verify your own entries | — |
 
@@ -308,6 +309,17 @@ You read Codex's text with the companion's `result <job-id>`; it comes back unch
 - A conclusion with no evidence attached goes back as a `continue` asking for the evidence; do not build on it.
 - On `STATUS: failed` or `CODEX_FAILED`: report the most useful log lines to the user. Do not take over and redo the whole task yourself.
 - Do not auto-apply every review finding, and do not dismiss one without looking; judge each as below.
+
+### Judging plans and designs
+
+A plan, audit or design that comes back for approval is checked for overdesign before you approve it or show it to the user. Codex plans tend to grow: they chase every edge case they can find, add compatibility layers and stack safeguards. Ask of each component:
+
+1. **Which part of the user's goal does it serve?** A component that serves only a rare case (a crash in a narrow window, a legacy format, a one-off acceptance check) or a requirement nobody stated is a candidate to cut.
+2. **Does it exist only to work around another component?** Remove the cause and both go away. Example: re-running setup on resume forced a new resume assertion; inheriting setup made both unnecessary.
+3. **Does existing code or an existing rule already cover it?** Reuse that instead of building a parallel mechanism.
+4. **Does it contradict a rule the user already set?** Tightening behavior beyond what the user approved is a defect, not extra safety.
+
+Keep the smallest version that meets the user's stated goal and falls back to the existing path for everything else. Tell the user what you cut, why, and the size difference (lines, days); anything the user explicitly wants stays. Put the trimmed scope into the `continue` brief as an explicit "do not build" list so the implementing thread does not bring it back. When dispatching a design, ask for the minimal version first and for optional extensions listed separately, each with its cost.
 
 ### Judging review findings
 

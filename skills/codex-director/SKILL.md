@@ -25,6 +25,7 @@ Before delegating, read the applicable repository instructions and establish the
 | Conclusions | Check evidence, `verify` or `retract`, and resolve conflicts | `find`, recheck file:line, and `save` useful conclusions; correct old entries with `--supersedes` | Records commit, blobs and source; flags possible staleness |
 | Memory | Sole writer under the user's memory rules | Read only; return suggested memories | Lists the index when available |
 | Siblings | Sole relay of cross-task facts and entry IDs | Report to the parent | — |
+| Plans | Cut overdesign before approving or forwarding a plan; keep the smallest version that meets the user's goal | Report the minimal version first and list optional extensions with their cost | — |
 | Delivery | Check evidence and report to the user | Self-check within scope; return evidence, results and saved IDs | — |
 | Summaries and verification | Own phase/session summaries and entry verification | Do not write summaries, write memory, or verify your own entries | — |
 
@@ -96,6 +97,8 @@ Answer questions using the user's existing requirements and authorization. Ask t
 ## Verify and deliver
 
 An agent's final answer is evidence to review, not automatic acceptance. Inspect the relevant diff or source claims and the actual focused test output. Distinguish code inspection, local/mock checks, and live-system evidence; mark missing proof as unverified. Run only required checks related to the change, and do not repeat passing tests without a new reason.
+
+A plan, audit or design that comes back for approval is checked for overdesign before you approve it or show it to the user. For each component, ask which part of the user's goal it serves, whether it exists only to work around another component, whether existing code or rules already cover it, and whether it tightens behavior beyond what the user approved. Cut components that serve only rare cases, legacy formats, one-off checks or unstated requirements; keep the smallest version that meets the goal and falls back to the existing path otherwise. Tell the user what you cut, why, and the size difference, and give the implementing agent an explicit "do not build" list. When commissioning a design, ask for the minimal version first and optional extensions listed separately with their cost.
 
 For a defect or a material implementation, commission an independent review when it adds useful confidence. Give the reviewer the requirements and exact candidate revision/diff without telling it the expected verdict. Send actionable findings to the original executor with `followup_task`, then verify the resulting change. A problem gets at most one review round: after the fixes, verify with focused tests and deliver; never commission a second review of the fixes, because reviewers keep finding ever rarer defensive cases and further rounds do not converge. If verification shows a fix is still wrong, send another `followup_task` and judge the result yourself. Avoid a review cycle for trivial edits or treating a review summary as proof that tests passed.
 
