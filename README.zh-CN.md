@@ -213,7 +213,7 @@ Codex 知道自己是被谁启动的。`investigate` 和 `implement` 两种模�
 
 **Codex 输出不压缩。** Claude 用 `result <job-id>` 读 Codex 的结果，一字不动。省 Claude 上下文的手段只有分工本身（Claude 不读文件、不写代码），不靠截断或摘要 Codex 的回答。
 
-**一个问题一个线程，review 只在值得时做。** 改代码类任务先派 `implement`（改动范围不清楚时先 `investigate`，再在同一线程里 `continue` 做实现）。实现回来后由 Claude 自行判断这次改动值不值得派 `adversarial-review`，审或不审都会说明。有问题让 Codex 在同一线程里用 `continue` 自己修，最多三轮。
+**一个问题一个线程，review 只在值得时做。** 改代码类任务先派 `implement`（改动范围不清楚时先 `investigate`，再在同一线程里 `continue` 做实现）。实现回来后由 Claude 自行判断这次改动值不值得派 `adversarial-review`，审或不审都会说明。有问题让 Codex 在同一线程里用 `continue` 自己修。同一问题最多审一轮，修完用测试验证后直接收尾，不再复审。
 
 **并行改文件使用 worktree 配合写时复制。** 主 agent 为每个写入者创建独立目录，包括主 agent 自己，并把绝对路径写进 `CWD:`。插件包含 `scripts/worktree.mjs` 时，优先使用：
 
