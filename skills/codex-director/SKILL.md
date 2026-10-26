@@ -40,7 +40,7 @@ If two or more tasks repeat the same mistaken assumption or lack the same prereq
 
 ## Dispatch
 
-Give one agent a whole problem: investigation through implementation and focused verification when authorized. Continue that problem with the same agent; use a fresh agent for an independent review. Dispatch independent tasks together when useful, within the runtime's concurrency limit, which includes the main agent.
+Give one agent a whole problem: investigation through implementation and focused verification when authorized. Continue that problem with the same agent, including implementing a plan, audit or design that agent wrote once it is approved; use a fresh agent for an independent review. Dispatch independent tasks together when useful, within the runtime's concurrency limit, which includes the main agent.
 
 Use `collaboration.spawn_agent` with a short, distinct `task_name`, `fork_turns: "none"`, and a self-contained `message`. Keep the inherited model and reasoning settings unless the user or applicable instructions explicitly select others. Record the returned agent ID and canonical task name with its goal and assigned directory. Native agent IDs replace the old plugin job/thread IDs.
 
