@@ -4,7 +4,7 @@
 #                                          STATUS: started / JOB / NAME / THREAD (launch + collect in one call)
 #   dispatch.sh follow <job-id> --cwd <repo> [--after <cursor>] [--max-seconds <n>] [--until done]
 #                                          block and print the job's event stream until something the director must act on
-#                                          (DONE/FAILED/QUESTION/QUESTION_PENDING/NOTIFIED/STALLED/TIMEOUT)
+#                                          (DONE/FAILED/QUESTION/QUESTION_PENDING/NOTIFIED/TIMEOUT)
 #   dispatch.sh events --cwd <repo>    stream job events (one line each) for a Monitor; needs a plugin with `events`
 #   dispatch.sh message <job-id> <prompt-file> [--cwd <repo>] [--interrupt|--queue]
 #                                          forward a correction; print MESSAGED (with queued=<job> for --queue) or MESSAGE_FAILED
