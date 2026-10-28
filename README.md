@@ -27,7 +27,7 @@ The Claude Code edition installs a skill with two scripts, a Codex skill for its
 | File | Purpose |
 |---|---|
 | `skills/code-director/SKILL.md` | Working rules for the Claude main thread: what to delegate, how to write a brief, how to run things in parallel, how the review loop works |
-| `skills/code-director/scripts/dispatch.sh` | All dispatch logic: picks the executor and its command by MODE, prepends the director note, starts the run through the plugin's `codex-companion.mjs`, waits, collects; `dispatch` starts a job in one call, `follow` blocks on a job's event stream until the director must act, `events` streams job events for a monitor |
+| `skills/code-director/scripts/dispatch.sh` | All dispatch logic: picks the executor and its command by MODE, prepends the director note, starts the run through the plugin's `codex-companion.mjs`, waits, collects; `dispatch` starts a job in one call, `follow` blocks on a job's event stream until the director must act, `events` streams job events for SDK/headless consumers |
 | `skills/code-director/scripts/context.sh` | Repository conclusions and discovery of rules and memory the executor needs |
 | `skills/codex-executor/SKILL.md` | Codex skill a dispatched task follows: working rules, the shared-context procedure and the reply format |
 | `docs/claude-md-snippet.md` | A routing rule for `CLAUDE.md` so that matching tasks always go through this path |
@@ -38,7 +38,7 @@ Flow:
 sequenceDiagram
     participant U as User
     participant C as Claude main thread
-    participant P as Codex plugin tasks pane
+    participant P as Codex plugin
     participant X as Codex
 
     U->>C: describes the task
@@ -47,11 +47,11 @@ sequenceDiagram
         C->>X: dispatch.sh dispatch (MODE: implement)
         C->>X: dispatch.sh dispatch (MODE: investigate)
     end
-    Note over P: the pane draws every job and arms one events Monitor per active repository
+    Note over P: the pane draws each job's trace; the director channel delivers events
     X-->>P: job.completed (or question.opened, director.notified, job.failed)
-    P-->>C: Monitor notification reaches the current turn
+    P-->>C: director channel message reaches the current turn
     C->>X: answers or reacts through the worker
-    C->>X: MODE: adversarial-review (detached; reported by an event monitor)
+    C->>X: MODE: adversarial-review (detached; reported by a job event)
     C->>X: MODE: continue, WRITE: yes (Codex fixes its own findings, same thread)
     X-->>P: job.completed
     C->>C: runs tests, spot-checks file:line claims
@@ -90,7 +90,7 @@ Prerequisites:
 
 1. Claude Code (tested with 2.1.259)
 2. Codex CLI installed and logged in (tested with 0.152.1): `npm install -g @openai/codex && codex login`
-3. The Codex plugin for Claude Code, installed from this fork of the official plugin: [y-cruce/codex-plugin-cc](https://github.com/y-cruce/codex-plugin-cc). code-director uses its `task --thread <id>`, tasks pane, Monitor integration, and live controls. In a terminal:
+3. The Codex plugin for Claude Code, installed from this fork of the official plugin: [y-cruce/codex-plugin-cc](https://github.com/y-cruce/codex-plugin-cc). code-director uses its `task --thread <id>`, tasks pane, director channel, and live controls. In a terminal:
 
    ```bash
    claude plugin uninstall codex@openai-codex   # only if the official one is installed
@@ -120,7 +120,7 @@ Make order export asynchronous and send an email when it finishes
 Review the changes on this branch
 ```
 
-Claude loads code-director, writes a brief, dispatches it, acts on the events the tasks pane raises, spot-checks, and reports. You can also name it directly: "ask codex to look into X".
+Claude loads code-director, writes a brief, dispatches it, acts on job events from the plugin, spot-checks, and reports. You can also name it directly: "ask codex to look into X".
 
 With the plugin's `mcp__codex__tasks` tool, Claude can find a thread to continue or check what this session has running in one call. It lists this session's threads across repositories, newest first, with the name, thread id (`pending` until known), executor, status, latest job and repository. Queued follow-up rounds share one line with their thread. Optional `query` filters names without regard to case, `cwd` limits the repository, `limit` sets the cap (default 20, range 1–100), and `all: true` includes other sessions' tasks created in the last 3 days with their session ids marked. Set `days` to a positive integer to widen that window. This session's threads have no age limit. Older matches are counted at the end. The first listing migrates older unindexed jobs once; later listings read this session's index. Indexes idle for 7 days expire; job records and state directories remain available.
 
@@ -205,7 +205,7 @@ Plugin 1.4.45 adds nested Git submodules and checked removal. Each submodule get
 
 Executors work only in the assigned directory, check symlinks and absolute paths before builds, and keep writable dependencies and outputs separate. Commit submodule changes before updating the parent's gitlink and report commits that need preservation. After integration and stopping tasks, the director runs `dispatch.sh worktree remove /abs/source-repo /abs/worktree`; it refuses removal for uncommitted, untracked or ignored files and new submodule commits outside the recorded initial refs and remote-tracking refs. Only after those checks does it use Git's force flag required for initialized submodules. The parent branch is retained. Pane expiry does not reclaim directories, and a worktree must remain while its thread still needs `continue`. Read-only source investigations may use a shared checkout at a pinned SHA; tests that write files need isolation too.
 
-**Detached start, events instead of waits.** Task runs use native background jobs; `dispatch` checks startup for up to 10 seconds, returning early once the job is running with a thread ID or has finished. A job that fails during this check, or a launch the companion rejects, returns `STATUS: failed` with an `ERROR:` line; later completion, questions, and notes come back through the plugin's tasks pane. Reviews start as a detached process and are reported by an event monitor.
+**Detached start, events instead of waits.** Task runs use native background jobs; `dispatch` checks startup for up to 10 seconds, returning early once the job is running with a thread ID or has finished. A job that fails during this check, or a launch the companion rejects, returns `STATUS: failed` with an `ERROR:` line; later completion, questions, and notes come back through the plugin's director channel. Reviews start as a detached process and their completion or failure event supplies the job id.
 
 **Decision logic lives in shell, not in the model's judgment.** For review modes, the choice between branch mode, working-tree mode, and the fallback is a fixed script. Claude pastes the brief into `dispatch.sh dispatch` and fills in nothing else.
 
@@ -229,15 +229,15 @@ For automatic corrections, run `bash ~/.claude/skills/code-director/scripts/disp
 
 A new round on the same problem is another `dispatch` with `MODE: continue` and its `THREAD:`. If a structured question is pending, answer it through `answer` before sending an ordinary message; the worker refuses messages while that request is open.
 
-For a structured question, the director receives a `question.opened` line from the tasks pane (or a `QUESTION` event from the monitor on that path) while Codex remains active. A request is reported as `QUESTION` only once and only while it is still open; an answered request is never reported again, and a request that comes up a second time while still unanswered arrives as `QUESTION_PENDING`, telling the director to check status rather than answer blindly. It supplies an answers-map JSON file, such as `{"<question-id>":{"answers":["..."]}}`, through `/codex:answer <job-id> --request-id <id> --answers-file <path>`, using the question IDs from status as keys. Questions time out after 10 minutes. `/codex:status <job-id>` exposes pending messages, questions, notifications, and interruption state.
+For a structured question, the director receives a `question_opened` channel event with the request id, question ids, full text and options while Codex remains active. It supplies an answers-map JSON file, such as `{"<question-id>":{"answers":["..."]}}`, through `/codex:answer <job-id> --request-id <id> --answers-file <path>`, using those question IDs as keys. Answered requests are excluded from replay; if an event stream reports `QUESTION_PENDING`, check status before answering again. Questions time out after 10 minutes. `/codex:status <job-id>` exposes pending messages, questions, notifications, and interruption state.
 
 From Bash, use `dispatch.sh answer <job-id> <request-id> <answers-file> --cwd <repo>`. It checks the pending request, exact question IDs, and nonempty answers before sending, then checks status again; success prints `ANSWERED job=<id> request=<id>`, and failure prints `ANSWER_FAILED` with details and exits 1. `--cwd` can appear anywhere after `answer` and defaults to the current directory; relative answers-file paths resolve against that directory.
 
-**Nothing waits on a job.** The director writes the dispatch text to a file, runs `dispatch.sh dispatch` on it, and moves on; the call returns in seconds with the job id and thread. The plugin's tasks pane watches every job the session started, draws its live Codex trace, and automatically arms one `events` Monitor per repository with a live job. Its background notification can report completion, questions, notes and failures during the current turn. Events of a job a subagent dispatched go to that subagent. A monitored repository is excluded from the pane's prompt-submit path, so the same event does not wake the director twice. `/codex:tasks` opens or closes the pane, and `/codex:tasks <number | name>` switches between tasks. `dispatch.sh follow <job-id>` still blocks on one job's event stream for scripts, headless runs, and the times the director means to wait.
+**Nothing waits on a job.** The director dispatches the brief and moves on; the call returns in seconds with the job id and thread. Start Claude Code with `claude --dangerously-load-development-channels plugin:codex@y-cruce-codex` to enable the plugin's director channel (1.4.58+; confirm it at startup). Once its probe confirms delivery, completion, questions, notes and failures arrive as `<channel source="plugin:codex:director" event="..." job="...">` messages during the current turn or wake an idle session. Events of a job a subagent dispatched go to that subagent. The tasks pane draws the live trace; `/codex:tasks` opens or closes it, and `/codex:tasks <number | name>` switches between tasks. Reviews start detached; their completion or failure event supplies the job id. Read the full output with `result <job-id>` or the review file when an event provides `report=<path>`.
 
-The host ends an automatically armed Monitor after thirty minutes; the pane re-arms it while a live job remains. Review dispatch starts detached and does not immediately return a job id, but the pane discovers its job file by Claude session and can display it; the Monitor reliably supplies the terminal job id. When the pane is absent (SDK, headless, or hooks unavailable), arm `dispatch.sh events --cwd <repo>` yourself before dispatch. A manual stream repeats `QUESTION_PENDING` every 2 minutes and exits after an hour without an active job with `IDLE_EXIT`. Unknown `events` and `follow` options are rejected with the supported options named.
+The plugin manages fallback delivery when the channel is unavailable, including Monitor watches for older producers and ACP worker-exit recovery. In SDK/headless sessions without plugin hooks, consume `dispatch.sh events --cwd <repo>`, or use `dispatch.sh follow <job-id> --cwd <repo>` to block on one job. An event stream ends with `IDLE_EXIT` after an hour without an active job; restart it before the next dispatch. Unknown `events` and `follow` options are rejected with the supported options named.
 
-Codex knows who started it. For `investigate` and `implement`, the worker script prepends a short note to the brief: Codex was started by a director agent rather than a human, `request_user_input` questions go to the director, other Codex tasks may be running (listed from the director's `SIBLINGS:` header) and Codex must not coordinate with them itself. On plugins that expose the `notify_director` tool, Codex can also send the director a one-line note without stopping, but only when the director must act or relay something to another running task, never for progress; it arrives as a `NOTIFIED` event while the job keeps running, carrying `pending_request=<id>` when a structured question was open at that moment so the director answers it instead of sending a message. Codex tasks never talk to each other; the director relays.
+Codex knows who started it. For `investigate` and `implement`, the worker script prepends a short note to the brief: Codex was started by a director agent rather than a human, `request_user_input` questions go to the director, other Codex tasks may be running (listed from the director's `SIBLINGS:` header) and Codex must not coordinate with them itself. On plugins that expose the `notify_director` tool, Codex can also send the director a one-line note without stopping, but only when the director must act or relay something to another running task, never for progress; it arrives as a `director_notified` event while the job keeps running, carrying `pending_request=<id>` when a structured question was open at that moment so the director answers it instead of sending a message. Codex tasks never talk to each other; the director relays.
 
 All command selection, review fallbacks, and the director note live in `skills/code-director/scripts/dispatch.sh` (`dispatch` is `launch` plus `collect`), so the logic can be tested with `bash -n` and a stub companion.
 

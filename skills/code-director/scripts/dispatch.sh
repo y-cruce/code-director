@@ -5,7 +5,7 @@
 #   dispatch.sh follow <job-id> --cwd <repo> [--after <cursor>] [--max-seconds <n>] [--until done]
 #                                          block and print the job's event stream until something the director must act on
 #                                          (DONE/FAILED/QUESTION/QUESTION_PENDING/NOTIFIED/TIMEOUT)
-#   dispatch.sh events --cwd <repo>    stream job events (one line each) for a Monitor; needs a plugin with `events`
+#   dispatch.sh events --cwd <repo>    stream job events (one line each) for SDK/headless consumers; needs a plugin with `events`
 #   dispatch.sh message <job-id> <prompt-file> [--cwd <repo>] [--interrupt|--queue]
 #                                          forward a correction; print MESSAGED (with queued=<job> for --queue) or MESSAGE_FAILED
 #                                          no flag = add it to the running turn (Codex only); --queue = deliver as the
@@ -397,7 +397,7 @@ while True:
         raw = subprocess.check_output(["node", cc, "status", job_id, "--cwd", cwd, "--json"], stderr=subprocess.DEVNULL)
         job = json.loads(raw)["job"]
     except (subprocess.CalledProcessError, ValueError, KeyError):
-        # status unavailable: report started as before and let the monitor take over
+        # status unavailable: report started and receive later updates through job events
         print("STATUS: started\nJOB: " + job_id + "\nNAME: " + name + "\nTHREAD: " + requested_thread)
         sys.exit(0)
     (work / "status.json").write_bytes(raw)
@@ -423,9 +423,9 @@ if failed:
     sys.exit(1)
 PY
   else
-    # Detached path (review modes): no job id at launch; the monitor's DONE/FAILED event carries it.
+    # Detached path (review modes): no job id at launch; the completion/failure event carries it.
     echo "STATUS: started"; echo "JOB: "; echo "NAME: $(cat "$WORK/name" 2>/dev/null)"; echo "THREAD: "
-    echo "NOTE: started detached without a job id; the monitor's DONE/FAILED event carries it, then read the output with result <job-id>"
+    echo "NOTE: started detached without a job id; the completion/failure event carries it, then read the output with result <job-id>"
   fi
   [ -f "$WORK/note" ] && cat "$WORK/note"
   return 0
