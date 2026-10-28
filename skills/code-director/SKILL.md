@@ -23,7 +23,7 @@ Premise: the scarce resource is the Claude main thread's context and output. The
 | Rules | Fix recurring gaps in memory, or draft repository AGENTS.md changes for user confirmation before committing | Read the files listed by `rules` before work | Lists Claude-loaded rules Codex does not discover and the memory index |
 | Conclusions | Check evidence, `verify` or `retract`, and resolve conflicts | `find`, recheck file:line before citing, and `save` useful conclusions; name corrected entries with `--supersedes` | Records commit, file blobs and source; flags possible staleness |
 | Memory | Sole writer of user preferences, decisions and corrections, following existing memory rules | Read only; return suggested memories | Lists the index when available |
-| Siblings | Sole relay: forward entry IDs or send `message --queue` | Report cross-task facts to the director | — |
+| Siblings | Sole relay: forward entry IDs or send `message` (native steer for Codex; `--queue` for ACP) | Report cross-task facts to the director | — |
 | Plans | Cut overdesign before approving or forwarding a plan; keep the smallest version that meets the user's goal (see "Judging plans and designs") | Report the minimal version first and list optional extensions with their cost | — |
 | Delivery | Check evidence and report to the user | Self-check within authorized scope; return conclusions, evidence, check results and saved IDs | — |
 | Summaries and verification | Own phase/session summaries and entry verification | Do not write summaries, write memory, or verify your own entries | — |
@@ -48,7 +48,7 @@ All dispatch logic lives in `~/.claude/skills/code-director/scripts/dispatch.sh`
 
 | Tool | Replaces |
 |---|---|
-| `mcp__codex__message` (`job`, `cwd`, `text`, `delivery`: `queue`, `steer` or `interrupt`) | writing a prompt file and running `dispatch.sh message` (`steer` is the call with no flag) |
+| `mcp__codex__message` (`job`, `cwd`, `text`, optional `delivery`: `steer` by default, `queue` or `interrupt`) | writing a prompt file and running `dispatch.sh message` (`steer` is the call with no flag) |
 | `mcp__codex__answer` (`job`, `cwd`, `request`, `answers` as the JSON map) | writing an answers file and running `dispatch.sh answer` |
 | `mcp__codex__result` (`job`, `cwd`) | `node "$(… dispatch.sh companion)" result <job-id> --cwd <repo>` |
 | `mcp__codex__status` (`cwd`, optional `job`, optional `detail`) | `status [<job-id>] --cwd <repo> --brief` on the companion; `detail: true` is `--json` |
@@ -210,7 +210,7 @@ A correction goes in a file, not inline: write it with the Write tool and pass t
 
 For direct Bash delivery, use `bash ~/.claude/skills/code-director/scripts/dispatch.sh message <job-id> <prompt-file> --cwd <repo> [--interrupt|--queue]` (the two flags are two different intents; passing both is refused). It prints only `MESSAGED job=<id>` on success -- with `queued=<id>` appended for `--queue`, naming the job the queued turn will run as, so its `DONE` is recognizable when it arrives -- or `MESSAGE_FAILED job=<id> <reason>` on failure; unsupported plugins return `MESSAGE_UNSUPPORTED:` and exit 2. Keep the job ID with its repository and thread. Success means accepted for the next model request, not that the instruction has already been followed. The slash command `/codex:message <job-id> <text>` remains user-facing shorthand. Use the worker for automatic `message` and `answer` calls; `status` and `result` still use the selected companion with `--cwd <repo>`. Do not invoke these commands as skills.
 
-`--queue` is the one to reach for first: the agent finishes what it is doing, and the correction becomes the next turn in the same job and thread. Only one message waits at a time -- a second `--queue` while one is pending is refused rather than replacing it -- and a turn that ends failed, cancelled, or interrupted delivers nothing, saying so in the job's events rather than dropping the message quietly.
+For Codex, default to native steering: omit `delivery` (plugin 1.4.100 or later), set `delivery: "steer"`, or send `message` without a flag. Codex accepts the input into the active turn and reads it at a later model request. Use `queue` only when the user explicitly asks for the next turn; when that turn starts, Codex receives all waiting messages in arrival order. For ACP executors (qoder/dsh), use `delivery: "queue"` because they do not support mid-turn steering.
 
 Use `/codex:message <job-id> --interrupt <text>` when the current approach must stop. It cancels the turn and continues the same job and thread with the new instruction, retaining its original write permission. Report the returned partial changes; interruption does not undo files. Do not use this to escalate a read-only task's permissions.
 
