@@ -12,7 +12,11 @@ Use Antigravity (`agy`) by default for all frontend work; it specializes in fron
 
 **Qoder.** `model` names Qoder's own model (`dfmodel`, `fast`, `ultimate`); without it a task runs on the default in Qoder's settings, and `continue` keeps the model its thread was created on. Qoder runs in its `yolo` permission mode by default, so a dispatched task never stalls on a prompt no human is watching; `executor_mode` overrides it.
 
+For mid-turn messages, Qoder advertises its private `agentCapabilities._meta.qoder.promptQueueing` capability. A supporting plugin sends another `session/prompt` to the same session while the current prompt is running; Qoder can consume it at a loop boundary. Use default `delivery: "steer"` only when the plugin reports `midTurnSteer: true`. `queue` still waits for the current turn to end; older plugin copies that lack Qoder steering require it. Submission does not prove model consumption. Qoder does not implement the `_session/steering` extension.
+
 **DSH.** Leave `model` out to keep its configured model; an explicit value must be an advertised ACP model id. DSH has no session modes, so do not send `executor_mode`. Its default `executor_permissions: allow-once` selects only the offered one-shot allow option; `ask` forwards permission choices to you. Continue with `continue`, the returned thread, and the same command and profile. When a round and its queue finish, the worker process closes; the next dispatch restores the conversation through `session/resume`, and the plugin replays its own saved events because DSH resume does not.
+
+The original DSH ACP adapter allows only one in-flight prompt per session and rejects a second with `a prompt is already in flight for this session`. Its core/API has steer; the local `dsh-plugins/acp-steering` extension exposes it separately through `_session/steering`, while ordinary prompts retain the existing guard. Use steer when that extension advertises support and the plugin reports `midTurnSteer: true`; otherwise use queue or interrupt.
 
 **Antigravity.** Install Google's binary from the [ACP registry](https://github.com/agentclientprotocol/registry/blob/main/antigravity-acp/agent.json), keeping `localharness_external` beside it. The server starts with no arguments. Complete its Google authentication before dispatching; it stores settings under `~/.gemini/antigravity-acp/`, separately from `agy`. New sessions default to `gemini-4-argon` with `high` thinking; `model` and `executor_effort` override these values, and selections must be advertised by the session. The plugin sets thinking through ACP's `thinking_level` option. Leave `executor_mode` out for the server default. The default permission policy is `allow-once`. Continue with the returned session id and the same executable; a resumed session keeps its model unless explicitly overridden.
 
@@ -22,11 +26,15 @@ The helper must be discoverable on PATH or through `ANTIGRAVITY_HARNESS_PATH` (i
 
 Install the shared `codex-executor` skill under `~/.gemini/antigravity-cli/skills/codex-executor`; both the CLI and official ACP server read that user skill directory. Link the whole skill directory so its `scripts/context.sh` remains available. Dispatched tasks also receive the skill's absolute source path in the director note.
 
+**ACP steering extensions.** A server advertises these at the initialize response's top-level `_meta.steering.supported: true`. The plugin sends `_session/steering` with the current session, prompt and `_meta.steering.idleBehavior: "promptRequired"`. `injected` confirms insertion, not model consumption; `promptRequired` consumes nothing and asks the client to deliver a normal prompt later. A null or unrecognized outcome does not establish insertion. Unmodified DSH/Antigravity servers lack this advertisement; their local extensions must be installed before this route is available.
+
+Plugin 1.4.103 includes Antigravity's proxy at `<plugin-root>/scripts/agy-acp/acp-proxy.mjs`; select that executable through `executor_command` or `CODEX_DIRECTOR_ANTIGRAVITY_COMMAND`. It requires the existing official ACP 1.4.4 runtime. Setup details are in the plugin's `scripts/agy-acp/README.md`. DSH's patch is maintained in [dsh-plugins/acp-steering](https://github.com/y-cruce/dsh-plugins/tree/main/acp-steering).
+
 **What you lose off Codex:**
 
 - Native `review` and `adversarial-review` modes are refused: they use Codex's own review, which has no ACP equivalent. Frontend reviews still go to agy as `investigate` tasks with a read-only review brief.
 - `effort` does not reach the agent. Use `executor_effort` (or `$CODEX_DIRECTOR_EXECUTOR_EFFORT`): agy defaults to `high`; other ACP executors default to `xhigh`, settling for `max` or `high` when the model has no `xhigh`.
 - No `notify_director`, so no mid-run notes. Questions still arrive as `question_opened` through ACP elicitation.
-- No mid-turn messages: use `delivery: "queue"` or `"interrupt"`. A plain message is refused (`midTurnSteer: false`).
+- Mid-turn support is agent-specific: a supporting plugin can use advertised Qoder prompt queueing or `_session/steering` extensions. Servers without those capabilities still require `delivery: "queue"` or `"interrupt"`.
 - A thread belongs to the executor that created it: a Qoder session id cannot be resumed as a Codex thread.
 - The live view shows fewer details: no streaming command output, file diff counts or sub-agent rows. The result footer prints `Session ID:` with no `codex resume` line.

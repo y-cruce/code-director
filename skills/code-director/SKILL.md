@@ -96,13 +96,13 @@ Events wake you by themselves, so a quiet job needs nothing. On a check-in, or w
 
 | Intent | Call |
 |---|---|
-| A correction Codex should read without stopping | `mcp__codex__message`, default delivery: it lands at Codex's next model request |
-| A correction for the next turn, once the current one ends | `delivery: "queue"`, when the user asks for that or uses an ACP executor, which cannot take a mid-turn message |
+| A correction the running task can use without stopping | `mcp__codex__message`, default delivery: Codex uses native steer; Qoder or an ACP steering extension can use steer when the plugin reports `midTurnSteer: true` |
+| A correction for the next turn, once the current one ends | `delivery: "queue"`, when the user asks for the next turn, or for an executor that does not report mid-turn support |
 | Stop the current approach now | `delivery: "interrupt"`: cancels the turn and continues the same job and thread with the new instruction. Partial file changes stay, so report them |
 | End the job | `mcp__codex__cancel`; TaskStop cannot stop a Codex job |
 | A new round after the job finished | Dispatch `continue` |
 
-`MESSAGED` means accepted, not yet followed. A failed interrupt may already have cancelled the turn, so check `status` before resending. While a structured question is open, messages are refused: answer it first. An interrupt keeps the job's original write permission, so it cannot turn a read-only task into a writing one.
+`MESSAGED` means submitted, not yet followed. ACP steering requires an advertised extension (top-level `_meta.steering.supported`) or Qoder's `qoder.promptQueueing`, plus a plugin that exposes `midTurnSteer`; older copies still require queue. A failed interrupt may already have cancelled the turn, so check `status` before resending. While a structured question is open, messages are refused: answer it first. An interrupt keeps the job's original write permission, so it cannot turn a read-only task into a writing one.
 
 ### Answering questions
 

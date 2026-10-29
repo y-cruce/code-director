@@ -162,7 +162,7 @@ NAME: worker 回答子命令
 | `antigravity`（别名 `agy`） | 官方 `agy_acp_server.par` / `agy_acp_server`；按 PATH、`~/.local/bin/agy_acp_server.par` 查找，用 `EXECUTOR_COMMAND` 或 `CODEX_DIRECTOR_ANTIGRAVITY_COMMAND` 覆盖 | `EXECUTOR_ARGS`、`EXECUTOR_MODE`、`EXECUTOR_PERMISSIONS`（默认 `allow-once`，可改为 `ask`） |
 | `acp` | 任何在 stdio 上说 Agent Client Protocol 的 agent | `EXECUTOR_COMMAND`（必填）、`EXECUTOR_ARGS`（JSON 数组）、`EXECUTOR_MODE` |
 
-DSH 使用持久 ACP 会话。派单写 `EXECUTOR: dsh`；继续对话写 `MODE: continue`、`THREAD: <返回的 session id>`，并保持相同的可执行文件和 profile。一轮结束可以关闭进程，下次派单通过 `session/resume` 恢复模型上下文；插件自行保留事件历史。`message --queue` 等当前 prompt 结束，`--interrupt` 先取消再执行新指令。DSH 没有会话模式或在途 steering，默认只选择 `allow_once` 权限；写 `EXECUTOR_PERMISSIONS: ask` 则把选项交给 Director。省略 `MODEL` 时保留 DSH 配置的模型。设 `CODEX_DIRECTOR_EXECUTOR=dsh` 可将它作为默认执行器；dispatch 不安装程序或处理认证。
+DSH 使用持久 ACP 会话。派单写 `EXECUTOR: dsh`；继续对话写 `MODE: continue`、`THREAD: <返回的 session id>`，并保持相同的可执行文件和 profile。一轮结束可以关闭进程，下次派单通过 `session/resume` 恢复模型上下文；插件自行保留事件历史。`message --queue` 等当前 prompt 结束，`--interrupt` 先取消再执行新指令。DSH 没有会话模式，原始 ACP 适配器也未开放引导；本地 `dsh-plugins/acp-steering` 扩展将 `_session/steering` 接到原生 `agent.steer`，由支持该扩展的插件报告 `midTurnSteer: true`。默认只选择 `allow_once` 权限；写 `EXECUTOR_PERMISSIONS: ask` 则把选项交给 Director。省略 `MODEL` 时保留 DSH 配置的模型。设 `CODEX_DIRECTOR_EXECUTOR=dsh` 可将它作为默认执行器；dispatch 不安装程序或处理认证。
 
 Antigravity 使用 [ACP 注册表](https://github.com/agentclientprotocol/registry/blob/main/antigravity-acp/agent.json)提供的官方服务。保留二进制旁的 `localharness_external`，派单前完成服务自身的 Google 登录；配置位于 `~/.gemini/antigravity-acp/`，与 `agy` 分开。派单写 `EXECUTOR: antigravity`，原生工具传 `executor: "antigravity"`。插件 1.4.102 起，新会话默认 `gemini-4-argon`、思考强度 `high`，可用 `MODEL` 和 `EXECUTOR_EFFORT` 显式覆盖；续接会话时，只有显式提供 `MODEL` 才切换模型。`EXECUTOR_ARGS` 和 `EXECUTOR_MODE` 可指定启动参数和服务提供的模式。权限策略默认 `allow-once`。
 
@@ -205,9 +205,9 @@ Codex 在跑的时候，执行 `/codex:status` 能看到本仓库正在跑和最
 
 ### 运行中纠偏与回答
 
-Codex 的后续消息默认使用原生引导（`turn/steer`）：`/codex:message <job-id> <补充指令>` 会向当前轮追加消息，在后续模型请求中接收。主 agent 的 `mcp__codex__message` 省略 `delivery` 时也默认使用 `steer`（插件 1.4.100 起；旧版本需显式写 `delivery: "steer"`）。明确要求下一轮执行时才使用 `--queue`，Codex 会在下一轮开始时按顺序一次性交付全部积压消息。ACP 执行器（qoder/dsh）使用 `queue`，因为它们不支持在途引导。加 `--interrupt` 会取消当前轮，再在同一线程执行新指令；已有改动和原任务写权限会保留。接受消息不代表模型已经执行。返回的 Git 状态包含原有改动，不能全部归因于 Codex。
+Codex 的后续消息默认使用原生引导（`turn/steer`）：`/codex:message <job-id> <补充指令>` 会向当前轮追加消息，在后续模型请求中接收。主 agent 的 `mcp__codex__message` 省略 `delivery` 时也默认使用 `steer`（插件 1.4.100 起；旧版本需显式写 `delivery: "steer"`）。ACP 执行器在插件报告 `midTurnSteer: true` 时也可使用引导：Qoder 走私有 `qoder.promptQueueing`，声明 `_session/steering` 的服务走扩展入口，DSH/agy 的本地扩展可由此连接运行时输入。明确要求下一轮执行，或执行器尚未提供该能力时，使用 `--queue`；Codex 会在下一轮开始时按顺序一次性交付其积压消息。加 `--interrupt` 会取消当前轮，再在同一线程执行新指令；已有改动和原任务写权限会保留。已提交消息不代表模型已经执行。返回的 Git 状态包含原有改动，不能全部归因于 Codex。
 
-自动纠偏时运行 `bash ~/.claude/skills/code-director/scripts/dispatch.sh message <job-id> <prompt-file> --cwd <repo> [--interrupt|--queue]`：成功只输出 `MESSAGED job=<id>`（`--queue` 时末尾追加 `queued=<id>`，即排队那一轮将要使用的 job id）；失败输出 `MESSAGE_FAILED job=<id> <reason>` 并以非零退出码结束；插件不支持时输出 `MESSAGE_UNSUPPORTED:`，退出码为 2。现在没有转发 agent，主会话的每条自动纠偏都直接走这条 worker 命令。两个参数是两种意图，不能同时给：当前 turn 必须停止时加 `--interrupt`；纠正可以等这一轮结束、由它开下一轮时加 `--queue`。两者对 Codex 和 ACP 执行器都可用；都不加则把消息并入正在跑的 Codex turn，ACP 执行器会拒绝。
+自动纠偏时运行 `bash ~/.claude/skills/code-director/scripts/dispatch.sh message <job-id> <prompt-file> --cwd <repo> [--interrupt|--queue]`：成功只输出 `MESSAGED job=<id>`（`--queue` 时末尾追加 `queued=<id>`，即排队那一轮将要使用的 job id）；失败输出 `MESSAGE_FAILED job=<id> <reason>` 并以非零退出码结束；插件不支持时输出 `MESSAGE_UNSUPPORTED:`，退出码为 2。现在没有转发 agent，主会话的每条自动纠偏都直接走这条 worker 命令。两个参数是两种意图，不能同时给：当前 turn 必须停止时加 `--interrupt`；纠正可以等这一轮结束、由它开下一轮时加 `--queue`。两者对 Codex 和 ACP 执行器都可用；都不加需要执行器报告 `midTurnSteer` 能力，Codex 已支持，Qoder 通过私有 ACP promptQueueing 提供，DSH/agy 可通过引导扩展声明支持。插件 1.4.103 包含 agy 代理 `<plugin-root>/scripts/agy-acp/acp-proxy.mjs`，接入步骤见该目录 README。
 
 同一问题的新一轮通过另一份带 `MODE: continue` 和 `THREAD:` 的任务书再次执行 `dispatch`。有结构化反问挂起时，先通过 `answer` 回答；该 request 仍然打开时，worker 会拒绝普通消息。
 
