@@ -94,15 +94,17 @@ Events wake you by themselves, so a quiet job needs nothing. On a check-in, or w
 
 ### Steering a running job
 
+Corrections to running work default to steering in the same job, thread and turn. This covers Codex, Qoder, and DSH/agy with their steering extensions when the plugin reports `midTurnSteer: true`. Do not choose queue just because the executor uses ACP.
+
 | Intent | Call |
 |---|---|
-| A correction the running task can use without stopping | `mcp__codex__message`, default delivery: Codex uses native steer; Qoder or an ACP steering extension can use steer when the plugin reports `midTurnSteer: true` |
-| A correction for the next turn, once the current one ends | `delivery: "queue"`, when the user asks for the next turn, or for an executor that does not report mid-turn support |
+| A correction the running task should use without stopping | `mcp__codex__message`, omit `delivery` or set `delivery: "steer"` |
+| An instruction intended for the next turn, once the current one ends | `delivery: "queue"` |
 | Stop the current approach now | `delivery: "interrupt"`: cancels the turn and continues the same job and thread with the new instruction. Partial file changes stay, so report them |
 | End the job | `mcp__codex__cancel`; TaskStop cannot stop a Codex job |
 | A new round after the job finished | Dispatch `continue` |
 
-`MESSAGED` means submitted, not yet followed. ACP steering requires an advertised extension (top-level `_meta.steering.supported`) or Qoder's `qoder.promptQueueing`, plus a plugin that exposes `midTurnSteer`; older copies still require queue. A failed interrupt may already have cancelled the turn, so check `status` before resending. While a structured question is open, messages are refused: answer it first. An interrupt keeps the job's original write permission, so it cannot turn a read-only task into a writing one.
+`MESSAGED` means submitted, not yet followed; acceptance also does not prove model execution. If steering is unsupported or returns `TURN_NOT_ACTIVE`/`promptRequired`, check `status` and choose by intent: queue for a later turn, interrupt to stop active work, or continue a finished job. Do not automatically resend a failed steer as queue. See `references/executors.md` for the agent-specific capability and receipt details. A failed interrupt may already have cancelled the turn, so check `status` before resending. While a structured question is open, messages are refused: answer it first. An interrupt keeps the job's original write permission, so it cannot turn a read-only task into a writing one.
 
 ### Answering questions
 

@@ -25,6 +25,8 @@ CWD: /abs/path/to/repo
 
 The brief goes through a file so it never passes through a shell command line. Run `answer` alone, never through a pipe or `grep`: a pipe hides the `ANSWER_FAILED` line and replaces the exit code. `message` prints `MESSAGED job=<id>` (plus `queued=<id>` with `--queue`, naming the job the queued turn runs as) or `MESSAGE_FAILED job=<id> <reason>`.
 
+`message` with no flag steers the running turn for Codex, Qoder, and DSH/agy with the steering extensions when `midTurnSteer: true`. Do not add `--queue` merely because an executor uses ACP. Add `--queue` when the instruction is meant for the next turn, or `--interrupt` when the current turn must stop now. If steering is unsupported or the turn ended, check status before choosing the next action; a finished job needs `continue`.
+
 ## Event stream without plugin hooks
 
 With hooks loaded, the plugin delivers events itself through its channel, or falls back to Monitor watches it manages; do not arm a Monitor yourself. Only in an SDK or headless session without hooks, consume `bash $D events --cwd <repo>` (one line per event), or block on a single job with `bash $D follow <job-id> --cwd <repo> [--after <cursor>]`, which returns on the first event that needs you. The lines are `DONE` (completed, with `thread=` and, for a review, `report=`), `FAILED`, `QUESTION`, `NOTIFIED`, and `QUESTION_PENDING` (a question still open: check `status` before answering). `IDLE_EXIT` ends the stream after an idle hour; start a new one before the next dispatch.

@@ -8,7 +8,7 @@
 #   dispatch.sh events --cwd <repo>    stream job events (one line each) for SDK/headless consumers; needs a plugin with `events`
 #   dispatch.sh message <job-id> <prompt-file> [--cwd <repo>] [--interrupt|--queue]
 #                                          forward a correction; print MESSAGED (with queued=<job> for --queue) or MESSAGE_FAILED
-#                                          no flag = add it to the running turn (Codex only); --queue = deliver as the
+#                                          no flag = steer the running turn when supported; --queue = deliver as the
 #                                          next turn once this one ends; --interrupt = cancel this turn and run it now
 #   dispatch.sh answer <job-id> <request-id> <answers-file> [--cwd <repo>]
 #                                          deliver answers to a structured question

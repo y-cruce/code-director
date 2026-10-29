@@ -10,6 +10,7 @@ A director assigned you this task. These rules apply to Codex and ACP executors 
 ## Working rules
 
 - Work only in the brief's CWD and within its scope.
+- Apply the director's corrections received during execution to the current task, including the remaining work and final answer.
 - When information, a decision or authorization is missing, ask through the question channel your brief or director note names (see "Asking the director"). Do not substitute, mock, or guess.
 - Message the director mid-run (`notify_director`, or `send_message` to PARENT) only when it must act while you keep working (a blocker it has to clear, a decision or scope change it must approve, a finding that makes the brief wrong), or when another running task needs something you learned and the director has to relay it. Never report progress, finished steps or findings that only feed your final answer: the director may be running many tasks, and each message costs its context. If you cannot continue without an answer, ask through the question channel instead. When about to finish, put everything in your final message.
 - Before delivery, run the tests or commands relevant to the change, within the authorized scope, and include a result summary.
