@@ -289,6 +289,7 @@ do_launch() {
         # DSH exposes one-shot permissions, not Qoder's yolo session mode.
         EXECUTOR_PERMISSIONS="${EXECUTOR_PERMISSIONS:-allow-once}" ;;
       antigravity|agy)
+        EXECUTOR_EFFORT="${EXECUTOR_EFFORT:-${CODEX_DIRECTOR_EXECUTOR_EFFORT:-high}}"
         EXECUTOR_COMMAND="${EXECUTOR_COMMAND:-${CODEX_DIRECTOR_ANTIGRAVITY_COMMAND:-}}"
         if [ -z "$EXECUTOR_COMMAND" ]; then
           EXECUTOR_COMMAND=$(command -v agy_acp_server.par || command -v agy_acp_server || true)

@@ -7,5 +7,7 @@ For any task that reads code to understand it, debugs, implements a change, or r
 
 Antigravity (`agy`, alias of `antigravity`) specializes in frontend work. Send all frontend design, implementation, debugging, verification and reviews to it, including small changes. For frontend reviews use `MODE: investigate` with a read-only review brief. Split mixed frontend/backend work so agy owns the frontend part. Follow the `code-director` skill's ACP fallback when the installed tool schema lacks the agy names.
 
+New agy sessions default to `gemini-4-argon` with `high` thinking; `MODEL` and `EXECUTOR_EFFORT` are explicit overrides. Continuing a session keeps its model unless the brief selects another.
+
 For other work, pick the executor by what the task asks for. Work whose shape is already settled -- a scoped change, a question answered by reading a known area -- goes to qodercli on its default model (`EXECUTOR: qoder`), which is fast and cheap enough to run many at once. Medium-complexity work, more than the default should carry, goes to `EXECUTOR: qoder` with `MODEL: performance` (GPT-5.6-sol, 1M context). Only high-complexity work -- deciding the approach or the architecture, and the implementation that follows from it -- goes to `MODEL: ultimate` (Opus 5). Other reviews, second opinions, and root causes nobody has explained yet go to Codex (no `EXECUTOR` header).
 ```

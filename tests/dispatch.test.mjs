@@ -32,7 +32,7 @@ else {
   delete env.CODEX_COMPANION_SESSION_ID;
   for (const [executor, command, launchArgs] of [["dsh", "/custom/dsh", ["--profile", "acp"]],
     ["antigravity", "/custom/agy_acp_server.par", []], ["agy", "/custom/agy_acp_server.par", []]]) {
-    for (const [mode, extra] of [["investigate", ""], ["continue", "THREAD: session-test\nEXECUTOR_PERMISSIONS: ask\nEXECUTOR_ARGS: [\"--debug\"]\n"]]) {
+    for (const [mode, extra] of [["investigate", ""], ["continue", "THREAD: session-test\nEXECUTOR_PERMISSIONS: ask\nEXECUTOR_ARGS: [\"--debug\"]\nEXECUTOR_EFFORT: low\n"]]) {
       const result = spawnSync("bash", [SCRIPT, "dispatch"], { cwd, env, encoding: "utf8",
         input: `MODE: ${mode}\nNAME: ACP conversation\nCWD: ${cwd}\nEXECUTOR: ${executor}\n${extra}\nContinue the work.\n` });
       assert.equal(result.status, 0, result.stdout + result.stderr);
@@ -43,6 +43,7 @@ else {
       assert.equal(value("--executor-command"), command);
       assert.deepEqual(JSON.parse(value("--executor-args")), mode === "continue" ? ["--debug"] : launchArgs);
       assert.equal(value("--executor-permissions"), mode === "continue" ? "ask" : "allow-once");
+      assert.equal(value("--executor-effort"), mode === "continue" ? "low" : executor === "dsh" ? "xhigh" : "high");
       assert.equal(args.includes("--executor-mode"), false);
       assert.equal(args.includes("--executor-model"), false);
       if (mode === "continue") assert.equal(value("--thread"), "session-test");
