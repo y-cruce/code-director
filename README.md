@@ -152,16 +152,32 @@ NAME: worker answer subcommand
 
 ### Executors
 
-`EXECUTOR` picks which agent runs a task-class mode (`investigate`, `implement`, `continue`). It defaults to `$CODEX_DIRECTOR_EXECUTOR`, else `codex`. The skill sends every task to Codex on the model in your Codex config (`gpt-6-sol`), and uses `MODEL: luna` for bulk mechanical work whose result tests or the diff can confirm. Set `CODEX_DIRECTOR_EXECUTOR=qoder` to move everything to Qoder when Codex quota runs out; briefs stay the same.
+`EXECUTOR` picks which agent runs a task-class mode (`investigate`, `implement`, `continue`). The script defaults to `$CODEX_DIRECTOR_EXECUTOR`, else `codex`. The skill explicitly routes all frontend work to Antigravity (`agy`), whose specialty is frontend design and implementation: pages, components, styles, interactions, debugging, verification and frontend reviews, including small changes. Frontend reviews use `investigate` with a read-only brief; mixed tasks give agy the frontend part. Other tasks use Codex on its configured model, with `MODEL: luna` for bulk mechanical work whose result tests or the diff can confirm. `CODEX_DIRECTOR_EXECUTOR=qoder` can change the default executor for other work when needed.
 
 | EXECUTOR | Agent | Extra headers |
 |---|---|---|
 | `codex` (default) | Codex through the plugin's app-server | — |
 | `qoder` | qodercli over ACP; the binary is found on PATH, then `~/.qoder/entry/qoder`, or `CODEX_DIRECTOR_QODER_COMMAND` | `EXECUTOR_MODE` (a Qoder session mode, e.g. `yolo`) |
 | `dsh` | DeepSeek Harness over ACP (`dsh --profile acp`); override its executable with `EXECUTOR_COMMAND` or `CODEX_DIRECTOR_DSH_COMMAND` | `EXECUTOR_ARGS`, `EXECUTOR_PERMISSIONS` (`allow-once` by default, or `ask`) |
+| `antigravity` (alias `agy`) | Google's official `agy_acp_server.par` / `agy_acp_server`; found on PATH, then `~/.local/bin/agy_acp_server.par`, or overridden with `EXECUTOR_COMMAND` / `CODEX_DIRECTOR_ANTIGRAVITY_COMMAND` | `EXECUTOR_ARGS`, `EXECUTOR_MODE`, `EXECUTOR_PERMISSIONS` (`allow-once` by default, or `ask`) |
 | `acp` | Any other agent speaking the Agent Client Protocol on stdio | `EXECUTOR_COMMAND` (required), `EXECUTOR_ARGS` (a JSON array), `EXECUTOR_MODE` |
 
 DSH uses persistent ACP sessions. Dispatch with `EXECUTOR: dsh`; continue with `MODE: continue`, `THREAD: <the returned session id>` and the same executor command/profile. A finished round can close its process: the next dispatch restores model context with `session/resume`, while the plugin keeps the event history. `message --queue` waits for the current prompt; `--interrupt` cancels it before starting a replacement. DSH has no session modes or mid-turn steering. Its default permission policy selects only `allow_once`; `EXECUTOR_PERMISSIONS: ask` forwards the offered choices to the director. An omitted `MODEL` keeps DSH's configured model. Set `CODEX_DIRECTOR_EXECUTOR=dsh` to choose it by default; no installation or authentication is performed by dispatch.
+
+Antigravity uses the official server from the [ACP registry](https://github.com/agentclientprotocol/registry/blob/main/antigravity-acp/agent.json). Keep `localharness_external` beside the server binary and complete its Google login before dispatching; its settings live in `~/.gemini/antigravity-acp/`, separately from `agy`. Set `EXECUTOR: antigravity` (or `executor: "antigravity"` on the native dispatch tool); the server starts without arguments, uses its own model and mode defaults, and supports `continue` with the returned session id. `EXECUTOR_ARGS`, `MODEL` and `EXECUTOR_MODE` can override advertised settings. Its permission policy defaults to `allow-once`.
+
+Expose the matching `localharness_external` on PATH or set `ANTIGRAVITY_HARNESS_PATH` to its absolute path, including when the server executable is a symlink. Opening a session creates the runtime's `skills/system/run-workflow/SKILL.md` in the workspace before any prompt.
+
+`agy` is an equivalent alias for `antigravity`: both work in `executor` and `EXECUTOR`, and can continue the same session. The skill's installation is a symlink to this checkout, so a new Claude Code session reads the updated skill. With an older plugin whose tool schema lacks these names, it uses `executor: "acp"` with the absolute server path, empty arguments and `allow-once` permissions; both Bash preset names are also available.
+
+Install the shared executor skill for both Antigravity CLI and ACP from this checkout:
+
+```bash
+mkdir -p ~/.gemini/antigravity-cli/skills
+ln -s "$PWD/skills/codex-executor" ~/.gemini/antigravity-cli/skills/codex-executor
+```
+
+The directory link includes `scripts/context.sh` and keeps the installed skill synchronized with this checkout. A new Antigravity session discovers it.
 
 `MODEL` names the executor's own model; `MODEL: luna` is the one name that works on both: `gpt-6-luna` at `max` effort on Codex, `dfmodel` on Qoder. A Qoder task without `MODEL` runs on the default model in Qoder's own settings. Qoder runs in its `yolo` permission mode unless `EXECUTOR_MODE` says otherwise, so a dispatched task never stalls on a prompt no human is watching.
 

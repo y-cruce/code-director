@@ -152,16 +152,32 @@ NAME: worker 回答子命令
 
 ### 执行器
 
-`EXECUTOR` 决定谁来跑 task 类模式（`investigate`、`implement`、`continue`），默认取 `$CODEX_DIRECTOR_EXECUTOR`，没设就是 `codex`。技能把所有任务都派给 Codex，用你 Codex 配置里的模型（`gpt-6-sol`）；批量的机械改动、结果靠测试或 diff 就能核对的，写 `MODEL: luna`。Codex 额度不够时设 `CODEX_DIRECTOR_EXECUTOR=qoder`，整体切到 Qoder，任务书不用改。
+`EXECUTOR` 决定谁来跑 task 类模式（`investigate`、`implement`、`continue`）。脚本默认取 `$CODEX_DIRECTOR_EXECUTOR`，没设就是 `codex`。技能将所有前端工作交给擅长前端设计和实现的 Antigravity（`agy`）：页面、组件、样式、交互、排障、验证和前端评审都包括在内，小改动也一样。前端评审使用 `investigate` 配只读任务书，前后端混合任务把前端部分交给 agy。其他任务使用 Codex 配置里的模型；结果靠测试或 diff 就能核对的批量机械改动写 `MODEL: luna`。需要时可设 `CODEX_DIRECTOR_EXECUTOR=qoder` 切换其他任务的默认执行器。
 
 | EXECUTOR | 执行者 | 额外头部 |
 |---|---|---|
 | `codex`（默认） | 走插件 app-server 的 Codex | — |
 | `qoder` | 走 ACP 的 qodercli；二进制按 PATH、`~/.qoder/entry/qoder`、`CODEX_DIRECTOR_QODER_COMMAND` 的顺序找 | `EXECUTOR_MODE`（Qoder 的会话模式，例如 `yolo`） |
 | `dsh` | 走 ACP 的 DeepSeek Harness（`dsh --profile acp`）；用 `EXECUTOR_COMMAND` 或 `CODEX_DIRECTOR_DSH_COMMAND` 覆盖可执行文件 | `EXECUTOR_ARGS`、`EXECUTOR_PERMISSIONS`（默认 `allow-once`，可改为 `ask`） |
+| `antigravity`（别名 `agy`） | 官方 `agy_acp_server.par` / `agy_acp_server`；按 PATH、`~/.local/bin/agy_acp_server.par` 查找，用 `EXECUTOR_COMMAND` 或 `CODEX_DIRECTOR_ANTIGRAVITY_COMMAND` 覆盖 | `EXECUTOR_ARGS`、`EXECUTOR_MODE`、`EXECUTOR_PERMISSIONS`（默认 `allow-once`，可改为 `ask`） |
 | `acp` | 任何在 stdio 上说 Agent Client Protocol 的 agent | `EXECUTOR_COMMAND`（必填）、`EXECUTOR_ARGS`（JSON 数组）、`EXECUTOR_MODE` |
 
 DSH 使用持久 ACP 会话。派单写 `EXECUTOR: dsh`；继续对话写 `MODE: continue`、`THREAD: <返回的 session id>`，并保持相同的可执行文件和 profile。一轮结束可以关闭进程，下次派单通过 `session/resume` 恢复模型上下文；插件自行保留事件历史。`message --queue` 等当前 prompt 结束，`--interrupt` 先取消再执行新指令。DSH 没有会话模式或在途 steering，默认只选择 `allow_once` 权限；写 `EXECUTOR_PERMISSIONS: ask` 则把选项交给 Director。省略 `MODEL` 时保留 DSH 配置的模型。设 `CODEX_DIRECTOR_EXECUTOR=dsh` 可将它作为默认执行器；dispatch 不安装程序或处理认证。
+
+Antigravity 使用 [ACP 注册表](https://github.com/agentclientprotocol/registry/blob/main/antigravity-acp/agent.json)提供的官方服务。保留二进制旁的 `localharness_external`，派单前完成服务自身的 Google 登录；配置位于 `~/.gemini/antigravity-acp/`，与 `agy` 分开。派单写 `EXECUTOR: antigravity`，原生工具传 `executor: "antigravity"`；服务无需启动参数，默认沿用自身的模型和模式，通过返回的 session id 继续对话。可用 `EXECUTOR_ARGS`、`MODEL`、`EXECUTOR_MODE` 指定服务支持的配置。权限策略默认 `allow-once`。
+
+将同版本的 `localharness_external` 放到 PATH，或用 `ANTIGRAVITY_HARNESS_PATH` 指定它的绝对路径；服务入口是软链接时也需要这一步。官方运行时在创建会话时会向工作区生成 `skills/system/run-workflow/SKILL.md`，此时尚未发送提示词。
+
+`agy` 是 `antigravity` 的等价别名，`executor` 字段和 `EXECUTOR` 头部都接受这两种写法，也可交替续接同一会话。技能安装路径是指向本 checkout 的软链接，新开的 Claude Code 会话会读取更新后的技能。旧版插件的工具选项尚无这两个名称时，技能会通过已有的 `executor: "acp"` 调用服务，传入绝对程序路径、空参数和 `allow-once` 权限；Bash 的两种执行器写法也均可用。
+
+在本 checkout 中给 Antigravity CLI 和 ACP 安装共享执行技能：
+
+```bash
+mkdir -p ~/.gemini/antigravity-cli/skills
+ln -s "$PWD/skills/codex-executor" ~/.gemini/antigravity-cli/skills/codex-executor
+```
+
+目录软链接包含 `scripts/context.sh`，技能随本 checkout 更新，新建 Antigravity 会话即可发现它。
 
 `MODEL` 指的是执行器自己的模型；`MODEL: luna` 两边通用：Codex 上是 `gpt-6-luna`（推理强度 `max`），Qoder 上是 `dfmodel`。Qoder 任务不写 `MODEL` 时用 Qoder 自己设置里的默认模型。Qoder 默认跑在 `yolo` 权限模式，除非 `EXECUTOR_MODE` 另行指定——派出去的任务背后没人盯着，不能卡在权限确认上。
 

@@ -1,6 +1,6 @@
 ---
 name: code-director
-description: A way of working where another coding agent executes and Claude only directs. Load this skill for any task that involves reading code to understand current behavior, finding the root cause of a bug, implementing a change from requirements, reviewing a diff, or getting a second opinion, and whenever the user says "ask codex", "let codex look", "use codex", or names another executor such as qoder or dsh. Follow the process to dispatch the work; Claude only writes the brief, judges the result, and makes the calls.
+description: A way of working where another coding agent executes and Claude only directs. Load this skill for code investigation, debugging, implementation, frontend design, review or a second opinion, and whenever the user says "ask codex", "let codex look", "use codex", or names another executor such as qoder, dsh or Antigravity (agy). All frontend work defaults to agy. Follow the process to dispatch the work; Claude only writes the brief, judges the result, and makes the calls.
 ---
 
 # Code director mode
@@ -13,7 +13,7 @@ The scarce resource is the main thread's context and output. Codex reads and wri
 - **Run independent work in parallel.** A job takes minutes. Dispatch together everything that does not need another job's result, and keep working while they run.
 - **Ask for results you can check.** Every brief carries acceptance criteria. An implementation comes back with a diff and test output, an investigation with `file:line` or command output behind each conclusion. A bare summary is no basis for a decision.
 
-Simple tasks are faster done yourself: about three tool calls with no unfamiliar code to understand, such as a lookup in a known file, one grep, a few-line fix at a known spot, a config entry, or running a command and reporting its output. A dispatch costs a brief and a wait of at least a minute.
+Simple non-frontend tasks are faster done yourself: about three tool calls with no unfamiliar code to understand, such as a lookup in a known file, one grep, a few-line fix at a known spot, a config entry, or running a command and reporting its output. Frontend work follows the agy routing below, including small changes. A dispatch costs a brief and a wait of at least a minute.
 
 ## Shared context and memory
 
@@ -43,12 +43,16 @@ Fill `mode`, `name`, `cwd` and `brief` every time, and other fields only when a 
 | Standard code review | `review` | Prefer `base`; see "Reviews" |
 | Challenge the approach and assumptions | `adversarial-review` | The brief is the focus text; prefer `base` |
 
-**Model and effort.** Codex on its configured model and effort carries every task, so leave `model`, `effort` and `executor` empty, with two exceptions:
+**Frontend routing.** Antigravity (`agy`) specializes in frontend work. Send all frontend design, pages, components, styling, interactions, debugging and verification to it by default, using `executor: "agy"` (equivalent to `"antigravity"`), including small tasks. For frontend reviews, use `mode: "investigate"` with a read-only review brief, because ACP has no native review mode. Split mixed frontend/backend work so agy owns the frontend part. Continue an existing agy session for follow-ups. A later explicit user choice of executor takes precedence.
+
+**Model and effort.** For other tasks, Codex runs on its configured model and effort, so leave `model`, `effort` and `executor` empty, with two exceptions:
 
 - `model: luna` for bulk mechanical work whose correctness the tests or the diff alone can confirm: a rename across many files, the same edit in dozens of places, boilerplate. It costs next to nothing. Work that needs judgment to tell whether it is right stays on the default.
 - `effort` for a problem a round at the configured level came back unclear on, or one known to be non-deterministic (concurrency, ordering, intermittent failures). Escalate with `continue` in the same thread so Codex keeps what it already read; the thread stays at that level afterwards.
 
-Set `executor` or `model` otherwise only when the user names one. For qoder, dsh or another ACP agent, read `references/executors.md` first: those executors lose reviews and several controls.
+Outside the frontend routing above, set `executor` or `model` otherwise only when the user names one. For qoder, dsh, Antigravity or another ACP agent, read `references/executors.md` first: native reviews and several controls are unavailable.
+
+**Antigravity / agy.** `antigravity` is the executor's canonical name; `agy` is an equivalent alias. Accept either from the user and in the `executor` field. If the installed dispatch tool's schema offers neither value, use its existing `executor: "acp"` with `executor_command` set to the absolute path of `agy_acp_server.par` / `agy_acp_server`, `executor_args: []` and `executor_permissions: "allow-once"`. The Bash route accepts both `EXECUTOR: antigravity` and `EXECUTOR: agy` directly. Both launch the same official ACP server and can continue the same session. See `references/executors.md` for setup and session continuation.
 
 **What Codex is told.** For `investigate` and `implement`, dispatch.sh prepends a note saying a director started the task, that `request_user_input` questions and `notify_director` notes go to you, and that the `codex-executor` skill holds its working rules, shared-context steps and reply format. Leave all of that out of the brief. Tasks never talk to each other, so you are the only relay: when a new task overlaps a running one, send the running one a one-line `message` saying what started, and list it in the new task's `siblings`.
 
@@ -91,7 +95,7 @@ Events wake you by themselves, so a quiet job needs nothing. On a check-in, or w
 | Intent | Call |
 |---|---|
 | A correction Codex should read without stopping | `mcp__codex__message`, default delivery: it lands at Codex's next model request |
-| A correction for the next turn, once the current one ends | `delivery: "queue"`, when the user asks for that or the executor is qoder or dsh, which cannot take a mid-turn message |
+| A correction for the next turn, once the current one ends | `delivery: "queue"`, when the user asks for that or uses an ACP executor, which cannot take a mid-turn message |
 | Stop the current approach now | `delivery: "interrupt"`: cancels the turn and continues the same job and thread with the new instruction. Partial file changes stay, so report them |
 | End the job | `mcp__codex__cancel`; TaskStop cannot stop a Codex job |
 | A new round after the job finished | Dispatch `continue` |
@@ -145,7 +149,7 @@ Questions and investigations need one `investigate`; the user's follow-up questi
 - Requirements that are still undecided and need a trade-off confirmed with the user.
 - Operations on live environments (production servers, remote hosts, configuration of running services): Codex can read scripts and propose a plan; you execute it.
 - Talking to the user.
-- Documents and artifacts: HTML pages, reports, phase and session summaries, READMEs and other human-facing output. Dispatch `investigate` when you need facts, then write the document yourself. This rule divides your labor only, so keep it out of briefs; Codex updating comments or a README while coding is its own business.
+- Documents and artifacts outside frontend deliverables: reports, phase and session summaries, READMEs and other human-facing writing. Frontend pages and UI prototypes go to agy. Dispatch `investigate` when you need facts for a document, then write it yourself. This rule divides your labor only, so keep it out of briefs; an executor updating comments or a README while coding is its own business.
 
 ## Judging results
 
@@ -188,6 +192,6 @@ When early information starts getting lost, run `/codex:transfer` to turn the se
 
 ## Reference files
 
-- `references/executors.md`: qoder, dsh and other ACP agents, when the user names one.
+- `references/executors.md`: Antigravity for frontend work; qoder, dsh and other ACP agents when the user names one.
 - `references/worktrees.md`: creating and removing worktrees for parallel writers.
 - `references/cli.md`: the Bash forms when the `mcp__codex__*` tools are missing, the event stream for headless sessions, and cleaning stale rows in the tasks pane.

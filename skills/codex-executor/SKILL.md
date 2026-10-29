@@ -5,7 +5,7 @@ description: "Working rules and the shared repository context library for execut
 
 # Codex executor
 
-A director assigned you this task. The director talks to the user, writes briefs, judges results and makes the calls. You execute the brief and return results the director can check. Do not enter director mode or delegate further.
+A director assigned you this task. These rules apply to Codex and ACP executors such as Antigravity (`agy`). The director talks to the user, writes briefs, judges results and makes the calls. You execute the brief and return results the director can check. Do not enter director mode or delegate further.
 
 ## Working rules
 
@@ -33,7 +33,7 @@ The tool is `scripts/context.sh` in this skill's directory. Call it with `bash` 
 
 Before work:
 
-1. `bash <tool> rules [--from <startup directory>] [--memory <index>]`, passing the main agent startup directory and memory index when the brief or note gives them. Read every listed file: these are rules the director loads and Codex does not. The memory index is read-only; open the memories it links when they bear on the task.
+1. `bash <tool> rules [--from <startup directory>] [--memory <index>]`, passing the main agent startup directory and memory index when the brief or note gives them. Read every listed file: these are rules the director loads that the executor may not load automatically. The memory index is read-only; open the memories it links when they bear on the task.
 2. `bash <tool> find <task keywords>` and `bash <tool> find --kind repo-map`, then `show <id>` for relevant entries. Before citing an entry, recheck its file:line against current code, especially entries marked "可能过期".
 
 While working, save a conclusion when another task would otherwise have to rediscover it:
