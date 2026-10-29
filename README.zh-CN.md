@@ -164,7 +164,9 @@ NAME: worker 回答子命令
 
 DSH 使用持久 ACP 会话。派单写 `EXECUTOR: dsh`；继续对话写 `MODE: continue`、`THREAD: <返回的 session id>`，并保持相同的可执行文件和 profile。一轮结束可以关闭进程，下次派单通过 `session/resume` 恢复模型上下文；插件自行保留事件历史。安装下述本地引导扩展后，普通 `message` 可纠偏当前轮；`message --queue` 用于当前 prompt 结束后的下一轮，`--interrupt` 先取消再执行新指令。DSH 没有会话模式，原始 ACP 适配器也未开放引导；本地 `dsh-plugins/acp-steering` 扩展将 `_session/steering` 接到原生 `agent.steer`，由支持该扩展的插件报告 `midTurnSteer: true`。默认只选择 `allow_once` 权限；写 `EXECUTOR_PERMISSIONS: ask` 则把选项交给 Director。省略 `MODEL` 时保留 DSH 配置的模型。设 `CODEX_DIRECTOR_EXECUTOR=dsh` 可将它作为默认执行器；dispatch 不安装程序或处理认证。
 
-Antigravity 使用 [ACP 注册表](https://github.com/agentclientprotocol/registry/blob/main/antigravity-acp/agent.json)提供的官方服务。保留二进制旁的 `localharness_external`，派单前完成服务自身的 Google 登录；配置位于 `~/.gemini/antigravity-acp/`，与 `agy` 分开。派单写 `EXECUTOR: antigravity`，原生工具传 `executor: "antigravity"`。插件 1.4.102 起，新会话默认 `gemini-4-argon`、思考强度 `high`，可用 `MODEL` 和 `EXECUTOR_EFFORT` 显式覆盖；续接会话时，只有显式提供 `MODEL` 才切换模型。`EXECUTOR_ARGS` 和 `EXECUTOR_MODE` 可指定启动参数和服务提供的模式。权限策略默认 `allow-once`。
+Antigravity 使用 [ACP 注册表](https://github.com/agentclientprotocol/registry/blob/main/antigravity-acp/agent.json)提供的官方服务。保留二进制旁的 `localharness_external`，派单前完成服务自身的 Google 登录；配置位于 `~/.gemini/antigravity-acp/`，与 `agy` 分开。派单写 `EXECUTOR: antigravity`，原生工具传 `executor: "antigravity"`。更新后的插件与本地 agy 适配器中，新会话默认 `claude-opus-5-5`、思考强度 `high`，可用 `MODEL` 和 `EXECUTOR_EFFORT` 显式覆盖；续接会话时，只有显式提供 `MODEL` 才切换模型。`EXECUTOR_ARGS` 和 `EXECUTOR_MODE` 可指定启动参数和服务提供的模式。权限策略默认 `allow-once`。
+
+agy 内按任务选择模型：偏前端工作显式传 `MODEL: gemini-4-argon`，复杂任务（含复杂前端任务）传 `MODEL: claude-opus-5-5`，两者都用 `EXECUTOR_EFFORT: high`。用户显式指定模型时遵从用户选择；省略模型默认 Opus 5.5 high。
 
 将同版本的 `localharness_external` 放到 PATH，或用 `ANTIGRAVITY_HARNESS_PATH` 指定它的绝对路径；服务入口是软链接时也需要这一步。官方运行时在创建会话时会向工作区生成 `skills/system/run-workflow/SKILL.md`，此时尚未发送提示词。
 

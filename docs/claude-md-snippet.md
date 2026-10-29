@@ -7,7 +7,7 @@ For any task that reads code to understand it, debugs, implements a change, or r
 
 Antigravity (`agy`, alias of `antigravity`) specializes in frontend work. Send all frontend design, implementation, debugging, verification and reviews to it, including small changes. For frontend reviews use `MODE: investigate` with a read-only review brief. Split mixed frontend/backend work so agy owns the frontend part. Follow the `code-director` skill's ACP fallback when the installed tool schema lacks the agy names.
 
-New agy sessions default to `gemini-4-argon` with `high` thinking; `MODEL` and `EXECUTOR_EFFORT` are explicit overrides. Continuing a session keeps its model unless the brief selects another.
+Within agy, explicitly select `MODEL: gemini-4-argon` for frontend-focused work and `MODEL: claude-opus-5-5` for complex tasks, including complex frontend work. Use `EXECUTOR_EFFORT: high` for both. An omitted model defaults to Opus 5.5 high; an explicit user model choice takes precedence. Continuing a session keeps its model unless the brief selects another.
 
 Send corrections to a running task with `mcp__codex__message`, omitting `delivery` or setting `delivery: "steer"`. Codex, Qoder, and DSH/agy with their steering extensions support input in the same job/thread/turn when the plugin reports `midTurnSteer: true`; ACP alone is no reason to queue. Use `delivery: "queue"` for an intended next turn, and `delivery: "interrupt"` when the current turn must stop immediately. If steering is unavailable or the turn has ended, check status and choose the next action by intent; use `continue` for a finished job. Submission or acceptance does not prove model execution.
 
