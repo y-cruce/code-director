@@ -54,15 +54,6 @@ Outside the frontend routing above, set `executor` or `model` otherwise only whe
 
 **Antigravity / agy.** `antigravity` is the executor's canonical name; `agy` is an equivalent alias. Accept either from the user and in the `executor` field. If the installed dispatch tool's schema offers neither value, use its existing `executor: "acp"` with `executor_command` set to the absolute path of `agy_acp_server.par` / `agy_acp_server`, `executor_args: []` and `executor_permissions: "allow-once"`. The Bash route accepts both `EXECUTOR: antigravity` and `EXECUTOR: agy` directly. Both launch the same official ACP server and can continue the same session. See `references/executors.md` for setup and session continuation.
 
-Choose the model within agy by the work:
-
-| Work assigned to agy | `model` | `executor_effort` |
-|---|---|---|
-| Frontend-focused design, pages, components, styling and interactions | `gemini-4-argon` | `high` |
-| Complex tasks, including complex frontend work | `claude-opus-5-5` | `high` |
-
-Pass the frontend model explicitly; an omitted model defaults to `claude-opus-5-5` with `high` thinking. An explicit user model choice takes precedence. Continuing a session keeps its model unless the brief explicitly selects another.
-
 **What Codex is told.** For `investigate` and `implement`, dispatch.sh prepends a note saying a director started the task, that `request_user_input` questions and `notify_director` notes go to you, and that the `codex-executor` skill holds its working rules, shared-context steps and reply format. Leave all of that out of the brief. Tasks never talk to each other, so you are the only relay: when a new task overlaps a running one, send the running one a one-line `message` saying what started, and list it in the new task's `siblings`.
 
 **Parallel writes.** Only one writer works in a checkout at a time, you included. Give each parallel route that writes files its own worktree, created before dispatch and passed as `cwd`; read `references/worktrees.md` to create and remove them.
