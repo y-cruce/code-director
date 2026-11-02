@@ -9,7 +9,7 @@ The scarce resource is the main thread's context and output. Codex reads and wri
 
 - **Dispatch the reading.** "Where is X handled", "why does this happen": write a brief and let Codex read. Checking the `file:line` a result cites is judging, and you do that yourself.
 - **Dispatch the writing.** Specify the change, let Codex implement it, then judge.
-- **Dispatch whole problems.** One task goes from reading the code to a verified result. A plan, audit or design that comes back for approval is not finished: once approved, the implementation is the next `continue` of the thread that wrote it, even when hours and other tasks came in between.
+- **Dispatch whole problems.** One task goes from reading the code to a verified result. A plan, audit, verification or design that comes back for approval is not finished: once approved, the implementation is the next `continue` of the thread that wrote it, even when hours and other tasks came in between.
 - **Run independent work in parallel.** A job takes minutes. Dispatch together everything that does not need another job's result, and keep working while they run.
 - **Ask for results you can check.** Every brief carries acceptance criteria. An implementation comes back with a diff and test output, an investigation with `file:line` or command output behind each conclusion. A bare summary is no basis for a decision.
 
@@ -60,14 +60,16 @@ Outside the frontend routing above, set `executor` or `model` otherwise only whe
 
 ### Thread continuity
 
-A thread keeps everything Codex has read and concluded, so follow-ups on the same problem are faster and more accurate there. A fresh task re-reads the code, re-derives the numbers, and may read a plan differently from the thread that wrote it. Once a problem has a thread, every later dispatch about it is `continue` with that `thread`: further investigation, follow-up questions, implementing what it found or planned, fixing accepted review findings.
+A thread keeps everything Codex has read and concluded, so work that builds on it is faster and more accurate there. A fresh task re-reads the code, re-derives the numbers, and may read a plan differently from the thread that wrote it. Choose the thread by the context the next task needs: the step after an investigation, verification, plan or fix (implementing it, verifying it end to end, extending it to a neighbouring module, fixing accepted findings, answering follow-up questions) is `continue` with the thread that did the earlier work. A switch from reading to writing, a new task name, or a different set of files does not make it a new problem.
 
-- Before any `investigate` or `implement`, look the problem up with `mcp__codex__tasks` (a `query` from its name) or `context.sh find`. `tasks` lists only this session's threads unless you pass `all: true`, which adds other sessions' from the last 3 days (`days` widens that); use it when the problem predates this session. If a thread already worked on it, even one that only investigated or planned, `continue` that thread.
+- Before any `investigate` or `implement`, look for that thread with `mcp__codex__tasks` (a `query` from the problem's keywords) or `context.sh find`. `tasks` lists only this session's threads unless you pass `all: true`, which adds other sessions' from the last 3 days (`days` widens that); use it when the problem predates this session. If a thread already worked on the code, data or conclusions the new task depends on, even one that only investigated, verified or planned, `continue` that thread. When several fit, pick the one whose conclusions the task builds on directly.
+- Check the brief before sending a fresh task: if it tells Codex to read a report, plan or conclusion an earlier thread produced, or retells background a thread already worked out, send it to that thread as `continue`.
+- If that thread is still running, hand it the next step with `mcp__codex__message` and `delivery: "queue"`; the round starts when its current turn ends.
 - `continue` uses the thread's original `cwd`; any other path is rejected. To work in a worktree, continue from the original `cwd` and name the worktree's absolute path in the brief.
 - A `continue` brief says what changed since last time and what to do next; Codex already has the background.
 - `continue` starts a new turn once the current job has finished. While it runs, use the controls in "Steering a running job".
 - If you dispatched a fresh task for a problem that already had a thread, cancel it and `continue` the original, telling it about any branch or worktree the cancelled task created so it reuses or removes them.
-- Start fresh only for a different problem, a thread that has clearly gone wrong, or a judgment that must stay independent: reviews and second opinions always get a fresh thread.
+- Start fresh only for work no thread has context for, a thread that has clearly gone wrong, or a judgment that must stay independent: reviews and second opinions always get a fresh thread.
 
 ### Reviews
 
@@ -137,7 +139,7 @@ path/to/b.py  -- 可疑
 
 ## Standard pipeline (code changes)
 
-1. Run `context.sh find` and `mcp__codex__tasks`. When a thread already investigated, audited or planned this work, the implementation is a `continue` of it. If the requirement is ambiguous, ask the user first rather than letting Codex guess.
+1. Run `context.sh find` and `mcp__codex__tasks`. When a thread already investigated, verified, audited or planned this work, the implementation is a `continue` of it. If the requirement is ambiguous, ask the user first rather than letting Codex guess.
 2. Dispatch `implement` with the acceptance tests or commands. When the affected area is unclear, the same task finds it first; a separate `investigate` is for when you need its answer before you can decide what to build, and the implementation then continues that thread.
 3. Decide whether a review is worth it, weighing the damage a subtly wrong change could do against a brief, a wait and another round of context. When it is, dispatch `adversarial-review` with the intent of the change and your main concerns as the focus. When it is not, tell the user in one line that you skipped it and why.
 4. Judge every finding (see "Judging review findings") and send the accepted ones as `continue` with `write: true` to the implementation thread. A problem gets one review round: reviewers keep finding ever rarer defensive cases, so further rounds do not converge. Verify the fixes with tests; a fix that is still wrong goes back as another `continue` that you judge yourself.

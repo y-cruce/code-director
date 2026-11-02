@@ -193,6 +193,7 @@ Codex has a very large context window, and a thread keeps everything Codex has r
 
 - Every task result comes back with a `THREAD: <id>` line.
 - Any later dispatch about the same problem (more investigation, a follow-up question, implementing what was found, fixing review findings) uses `MODE: continue` with that `THREAD:` in the header.
+- The thread is chosen by the context the next task needs. Implementing or verifying end to end what an investigation, verification or plan concluded continues that thread, even when the task switches from reading to writing or touches other files. A brief that would point a fresh task at an earlier thread's report goes to that thread instead; a thread still running gets the next step queued with `message --queue`.
 - dispatch.sh checks the requested thread against the one the plugin is about to resume and refuses with `THREAD_MISMATCH` rather than silently continuing the wrong thread.
 
 With a plugin that supports `task --thread <id>` ([openai/codex-plugin-cc#719](https://github.com/openai/codex-plugin-cc/pull/719)), dispatch.sh resumes exactly the requested thread, so problems can be interleaved freely. Older plugin versions can only resume the most recent finished task thread of the current Claude session in the repo; there dispatch.sh falls back to a candidate check, and Claude avoids starting other task-class jobs in that repo between two `continue` calls.

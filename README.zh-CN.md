@@ -193,6 +193,7 @@ Codex 的上下文窗口很大，一个线程会记住它读过的所有代码�
 
 - 每次 task 类结果都带回一行 `THREAD: <id>`。
 - 同一个问题之后的所有派发（继续调查、追问、按调查结果实现、修 review 问题）都用 `MODE: continue`，头部带上这个 `THREAD:`。
+- 按下一步需要的上下文选线程。调查、验证或方案得出结论后，按结论实现或做端到端验证都续那个线程，从只读转为写代码、改动别的文件也一样。任务书要让新任务去读某个线程写的报告时，直接交给那个线程；该线程还在跑，就用 `message --queue` 把下一步排给它。
 - dispatch.sh 会核对请求的线程和插件即将续的线程是否一致，不一致就报 `THREAD_MISMATCH`，不会悄悄续到错的线程上。
 
 插件支持 `task --thread <id>` 时（见 [openai/codex-plugin-cc#719](https://github.com/openai/codex-plugin-cc/pull/719)），dispatch.sh 精确续到指定线程，多个问题可以随意交错。旧版插件只能续当前 Claude 会话在这个仓库里最近一个跑完的 task 线程，dispatch.sh 会退回候选校验，Claude 也会避免在两次 `continue` 之间往这个仓库派其他 task 类任务。
