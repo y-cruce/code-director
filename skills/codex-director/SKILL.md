@@ -66,7 +66,7 @@ MEMORY INDEX (read-only): <when known>
 
 SIBLINGS: <other active tasks and their owned paths, if any>
 Return evidence, not only a summary: changed files with `git diff --stat`
-and the commit hash, each command actually run with its exit code and output
+and the commit hash, each verification command (tests, builds, reproductions) with its exit code and key output
 quoted as printed, file:line behind each conclusion, unverified items, and any
 branch/commit/files that must be preserved.
 ```
