@@ -54,7 +54,7 @@ Outside the frontend routing above, set `executor` or `model` otherwise only whe
 
 **Antigravity / agy.** `antigravity` is the executor's canonical name; `agy` is an equivalent alias. Accept either from the user and in the `executor` field. If the installed dispatch tool's schema offers neither value, use its existing `executor: "acp"` with `executor_command` set to the absolute path of `agy_acp_server.par` / `agy_acp_server`, `executor_args: []` and `executor_permissions: "allow-once"`. The Bash route accepts both `EXECUTOR: antigravity` and `EXECUTOR: agy` directly. Both launch the same official ACP server and can continue the same session. See `references/executors.md` for setup and session continuation.
 
-**What Codex is told.** For `investigate` and `implement`, dispatch.sh prepends a note saying a director started the task, that `request_user_input` questions and `notify_director` notes go to you, and that the `codex-executor` skill holds its working rules, shared-context steps and reply format. Leave all of that out of the brief. Tasks never talk to each other, so you are the only relay: when a new task overlaps a running one, send the running one a one-line `message` saying what started, and list it in the new task's `siblings`.
+**What Codex is told.** For `investigate` and `implement`, dispatch.sh prepends a note saying a director started the task, that `request_user_input` questions and `notify_director` notes go to you, and that the `codex-executor` skill holds its working rules, shared-context steps and reply format. dispatch.sh also appends a "最终回报要求" block to every `investigate`, `implement` and `continue` prompt, requiring the final reply to carry evidence: changed files with `git diff --stat` and commit hashes, the commands actually run with their exit codes and output quoted as printed, and file:line behind each conclusion. Leave all of that out of the brief. Tasks never talk to each other, so you are the only relay: when a new task overlaps a running one, send the running one a one-line `message` saying what started, and list it in the new task's `siblings`.
 
 **Parallel writes.** Only one writer works in a checkout at a time, you included. Give each parallel route that writes files its own worktree, created before dispatch and passed as `cwd`; read `references/worktrees.md` to create and remove them.
 
@@ -130,7 +130,7 @@ The brief is for Codex, which has none of your conversation. Write it completely
 
 ## 验收
 - 怎样算完成：哪些测试要通过、哪条命令要跑、哪些问题要回答
-- 输出要求：结论 + 证据（file:line）+ 不确定的地方单独列出
+- 输出要求：结论 + 证据（file:line、命令原样输出）+ 改动的 `git diff --stat` 和提交哈希 + 不确定的地方单独列出
 
 ## 已知文件（可选）
 path/to/a.py  -- 入口
@@ -161,7 +161,7 @@ Codex is sometimes wrong, and a report describes intermediate state in its own w
 
 - Spot-check one or two `file:line` references before trusting a result.
 - Before acting on a conclusion that decides what happens next (a root cause, "this message was lost", "that turn is running"), check the raw data it rests on yourself: the file, the job state, the command output.
-- A conclusion with no evidence goes back as a `continue` asking for the evidence; do not build on it.
+- A conclusion with no evidence goes back as a `continue` asking for the evidence; do not build on it. The same goes for an implementation reported without its diff stat, commit hash or the test output as printed: "tests pass" is a claim, not evidence.
 
 ### Judging plans and designs
 

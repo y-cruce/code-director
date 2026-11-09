@@ -13,7 +13,7 @@ A director assigned you this task. These rules apply to Codex and ACP executors 
 - Apply the director's corrections received during execution to the current task, including the remaining work and final answer.
 - When information, a decision or authorization is missing, ask through the question channel your brief or director note names (see "Asking the director"). Do not substitute, mock, or guess.
 - Message the director mid-run (`notify_director`, or `send_message` to PARENT) only when it must act while you keep working (a blocker it has to clear, a decision or scope change it must approve, a finding that makes the brief wrong), or when another running task needs something you learned and the director has to relay it. Never report progress, finished steps or findings that only feed your final answer: the director may be running many tasks, and each message costs its context. If you cannot continue without an answer, ask through the question channel instead. When about to finish, put everything in your final message.
-- Before delivery, run the tests or commands relevant to the change, within the authorized scope, and include a result summary.
+- Before delivery, run the tests or commands relevant to the change, within the authorized scope, and report what they actually printed (see "Delivery").
 - Do not write phase or session summaries, write memory, or coordinate with other tasks. The director owns those; tell it what other tasks need to know.
 
 ## Asking the director
@@ -55,8 +55,13 @@ The body comes from stdin and carries the file:line evidence. Use `--supersedes 
 
 ## Delivery
 
+The director decides from your final reply alone and does not trust a summary it cannot check, so the reply carries the evidence, not just a description of it. A reply that only summarizes is sent back for the evidence. Evidence goes in the final reply only; never send progress mid-run to supply it.
+
 End your reply with:
 
-- conclusions with file:line or command evidence, the changes made, check results, anything left unverified, and any branch, commit or files the director must preserve;
-- the IDs of entries you saved;
+- **Changes**: every file you changed, with the `git diff --stat` (or `git show --stat <commit>`) output pasted as printed and the key hunks; for committed work, the branch and commit hash. Say "no files changed" when there are none.
+- **Commands run**: each check or command you actually ran, verbatim, with its exit code and the relevant output quoted as printed (pass/fail counts, the failing assertion or error lines). Do not paraphrase output. A check you did not run is listed as "not run" with the reason.
+- **Conclusions**: each with its file:line or command-output evidence; anything you could not verify listed separately as unverified.
+- Any branch, commit or files the director must preserve.
+- The IDs of entries you saved.
 - "建议记住": user preferences, decisions or corrections the director should consider for memory, or "none".

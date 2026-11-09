@@ -151,6 +151,22 @@ Other tasks currently running: ${SIBLINGS:-none known}
 EOF
 }
 
+# Appended after every investigate/implement/continue brief, so the evidence
+# requirement is the last thing the executor reads and also reaches threads
+# whose codex-executor skill text predates it (continue sends no director note).
+evidence_footer() {
+  cat <<'EOF'
+
+
+---- 最终回报要求 ----
+最终回复必须附带可核对的工作证据，只有文字总结的回复会被退回补证据：
+- 改动：改了哪些文件，附 `git diff --stat`（或 `git show --stat <commit>`）原样输出和关键改动片段；已提交的写明分支和提交哈希。没有改动就写"未改文件"。
+- 运行：实际执行过的命令（原样）、退出码和关键输出原文（测试的通过/失败数、报错行），不要转述；没跑的写"未运行"和原因。
+- 结论：每条结论附 file:line 或命令输出作依据；没验证的单独列为"未验证"。
+证据只写进最终回复，不要为此中途发进度。
+EOF
+}
+
 do_launch() {
   local input="$1"
   # Every launch gets its own work directory: several dispatch files may sit in one
@@ -186,13 +202,13 @@ do_launch() {
   local CMD=() FOCUS CAND
   case "$MODE" in
     investigate)
-      { director_note; cat "$WORK/brief.md"; } > "$WORK/prompt.md"
+      { director_note; cat "$WORK/brief.md"; evidence_footer; } > "$WORK/prompt.md"
       CMD=(node "$CC" task --cwd "$CWD" --prompt-file "$WORK/prompt.md" ${EFFORT:+--effort "$EFFORT"}) ;;
     implement)
-      { director_note; cat "$WORK/brief.md"; } > "$WORK/prompt.md"
+      { director_note; cat "$WORK/brief.md"; evidence_footer; } > "$WORK/prompt.md"
       CMD=(node "$CC" task --cwd "$CWD" --prompt-file "$WORK/prompt.md" ${EFFORT:+--effort "$EFFORT"} --write) ;;
     continue)
-      cp "$WORK/brief.md" "$WORK/prompt.md"
+      { cat "$WORK/brief.md"; evidence_footer; } > "$WORK/prompt.md"
       if [ -n "$THREAD" ] && grep -q '"thread"' "$CC"; then
         CMD=(node "$CC" task --cwd "$CWD" --thread "$THREAD" --prompt-file "$WORK/prompt.md")
       else

@@ -65,8 +65,10 @@ MAIN STARTUP DIRECTORY: <when known>
 MEMORY INDEX (read-only): <when known>
 
 SIBLINGS: <other active tasks and their owned paths, if any>
-Return conclusions with file:line or command evidence, changes, test results,
-unverified items, and any branch/commit/files that must be preserved.
+Return evidence, not only a summary: changed files with `git diff --stat`
+and the commit hash, each command actually run with its exit code and output
+quoted as printed, file:line behind each conclusion, unverified items, and any
+branch/commit/files that must be preserved.
 ```
 
 Use plain-language briefs, not the old `MODE` headers. An investigation is explicitly read-only, including no test runs that write files unless authorized. An implementation names permitted writes and checks. A review names the exact revision/diff and asks for actionable findings with evidence. Challenge assumptions when that is the requested review focus.
@@ -96,7 +98,7 @@ Answer questions using the user's existing requirements and authorization. Ask t
 
 ## Verify and deliver
 
-An agent's final answer is evidence to review, not automatic acceptance. Inspect the relevant diff or source claims and the actual focused test output. Distinguish code inspection, local/mock checks, and live-system evidence; mark missing proof as unverified. Run only required checks related to the change, and do not repeat passing tests without a new reason.
+An agent's final answer is evidence to review, not automatic acceptance. A final answer that only summarizes, without the diff stat, commit hash, command output or file:line it should carry, goes back to the same agent for that evidence before you judge it. Inspect the relevant diff or source claims and the actual focused test output. Distinguish code inspection, local/mock checks, and live-system evidence; mark missing proof as unverified. Run only required checks related to the change, and do not repeat passing tests without a new reason.
 
 A plan, audit or design that comes back for approval is checked for overdesign before you approve it or show it to the user. For each component, ask which part of the user's goal it serves, whether it exists only to work around another component, whether existing code or rules already cover it, and whether it tightens behavior beyond what the user approved. Cut components that serve only rare cases, legacy formats, one-off checks or unstated requirements; keep the smallest version that meets the goal and falls back to the existing path otherwise. Tell the user what you cut, why, and the size difference, and give the implementing agent an explicit "do not build" list. When commissioning a design, ask for the minimal version first and optional extensions listed separately with their cost.
 

@@ -47,6 +47,9 @@ else {
       assert.equal(args.includes("--executor-mode"), false);
       assert.equal(args.includes("--executor-model"), false);
       if (mode === "continue") assert.equal(value("--thread"), "session-test");
+      const prompt = fs.readFileSync(value("--prompt-file"), "utf8");
+      assert.match(prompt, /---- 最终回报要求 ----/);
+      assert.ok(prompt.indexOf("Continue the work.") < prompt.indexOf("最终回报要求"), "evidence requirement follows the brief");
     }
   }
 });
