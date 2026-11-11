@@ -45,10 +45,7 @@ Fill `mode`, `name`, `cwd` and `brief` every time, and other fields only when a 
 
 **Frontend routing.** Antigravity (`agy`) specializes in frontend work. Send all frontend design, pages, components, styling, interactions, debugging and verification to it by default, using `executor: "agy"` (equivalent to `"antigravity"`), including small tasks. For frontend reviews, use `mode: "investigate"` with a read-only review brief, because ACP has no native review mode. Split mixed frontend/backend work so agy owns the frontend part. Continue an existing agy session for follow-ups. A later explicit user choice of executor takes precedence.
 
-**Model and effort.** For other tasks, Codex runs on its configured model and effort, so leave `model`, `effort` and `executor` empty, with two exceptions:
-
-- `model: luna` for bulk mechanical work whose correctness the tests or the diff alone can confirm: a rename across many files, the same edit in dozens of places, boilerplate. It costs next to nothing. Work that needs judgment to tell whether it is right stays on the default.
-- `effort` for a problem a round at the configured level came back unclear on, or one known to be non-deterministic (concurrency, ordering, intermittent failures). Escalate with `continue` in the same thread so Codex keeps what it already read; the thread stays at that level afterwards.
+**Model and effort.** For other tasks, Codex runs on its configured model and effort, so leave `model`, `effort` and `executor` empty. Set `effort` only for a problem a round at the configured level came back unclear on, or one known to be non-deterministic (concurrency, ordering, intermittent failures). Escalate with `continue` in the same thread so Codex keeps what it already read; the thread stays at that level afterwards.
 
 Outside the frontend routing above, set `executor` or `model` otherwise only when the user names one. For qoder, dsh, Antigravity or another ACP agent, read `references/executors.md` first: native reviews and several controls are unavailable.
 

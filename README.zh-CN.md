@@ -152,7 +152,7 @@ NAME: worker 回答子命令
 
 ### 执行器
 
-`EXECUTOR` 决定谁来跑 task 类模式（`investigate`、`implement`、`continue`）。脚本默认取 `$CODEX_DIRECTOR_EXECUTOR`，没设就是 `codex`；`review` 和 `adversarial-review` 在任务书没写执行器时仍走 Codex。技能将所有前端工作交给擅长前端设计和实现的 Antigravity（`agy`）：页面、组件、样式、交互、排障、验证和前端评审都包括在内，小改动也一样。前端评审使用 `investigate` 配只读任务书，前后端混合任务把前端部分交给 agy。其他任务使用 Codex 配置里的模型；结果靠测试或 diff 就能核对的批量机械改动写 `MODEL: luna`。需要时可设 `CODEX_DIRECTOR_EXECUTOR=qoder` 切换其他任务的默认执行器。
+`EXECUTOR` 决定谁来跑 task 类模式（`investigate`、`implement`、`continue`）。脚本默认取 `$CODEX_DIRECTOR_EXECUTOR`，没设就是 `codex`；`review` 和 `adversarial-review` 在任务书没写执行器时仍走 Codex。技能将所有前端工作交给擅长前端设计和实现的 Antigravity（`agy`）：页面、组件、样式、交互、排障、验证和前端评审都包括在内，小改动也一样。前端评审使用 `investigate` 配只读任务书，前后端混合任务把前端部分交给 agy。其他任务使用 Codex 配置里的模型。需要时可设 `CODEX_DIRECTOR_EXECUTOR=qoder` 切换其他任务的默认执行器。
 
 | EXECUTOR | 执行者 | 额外头部 |
 |---|---|---|
@@ -179,7 +179,7 @@ ln -s "$PWD/skills/codex-executor" ~/.gemini/antigravity-cli/skills/codex-execut
 
 目录软链接包含 `scripts/context.sh`，技能随本 checkout 更新，新建 Antigravity 会话即可发现它。
 
-`MODEL` 指的是执行器自己的模型；`MODEL: luna` 两边通用：Codex 上是 `gpt-6-luna`（推理强度 `max`），Qoder 上是 `dfmodel`。Qoder 任务不写 `MODEL` 时用 Qoder 自己设置里的默认模型。Qoder 默认跑在 `yolo` 权限模式，除非 `EXECUTOR_MODE` 另行指定——派出去的任务背后没人盯着，不能卡在权限确认上。
+`MODEL` 指的是执行器自己的模型。Qoder 任务不写 `MODEL` 时用 Qoder 自己设置里的默认模型。Qoder 默认跑在 `yolo` 权限模式，除非 `EXECUTOR_MODE` 另行指定——派出去的任务背后没人盯着，不能卡在权限确认上。
 
 `review` 和 `adversarial-review` 仍是 Codex 独有，配别的执行器会被拒绝。非 Codex 的 agent 没有 `request_user_input` 和 `notify_director`，任务书说明里不会提这两个工具。
 

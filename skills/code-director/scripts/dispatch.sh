@@ -29,7 +29,7 @@
 # SIBLINGS, CWD, SANDBOX (full = no sandbox, the default for every task; network = workspace-write plus network
 # access; default = the plugin's own read-only / workspace-write choice),
 # EXECUTOR (codex | qoder | dsh | antigravity | agy | acp) with EXECUTOR_COMMAND, EXECUTOR_ARGS (JSON array), EXECUTOR_MODE, EXECUTOR_PERMISSIONS, EXECUTOR_EFFORT and MODEL for a
-# non-Codex agent (MODEL: luna maps to gpt-6-luna on Codex and dfmodel on qoder); task-class modes only. Without the header the default is $CODEX_DIRECTOR_EXECUTOR, else codex,
+# non-Codex agent; task-class modes only. Without the header the default is $CODEX_DIRECTOR_EXECUTOR, else codex,
 # and qoder runs in its `yolo` permission mode unless EXECUTOR_MODE or $CODEX_DIRECTOR_EXECUTOR_MODE says otherwise.
 set -uo pipefail
 
@@ -196,11 +196,6 @@ do_launch() {
   # not move them; an explicit EXECUTOR header still meets the gate below.
   case "$MODE" in review|adversarial-review) EXECUTOR="${EXECUTOR:-codex}" ;; esac
   EXECUTOR="${EXECUTOR:-${CODEX_DIRECTOR_EXECUTOR:-codex}}"
-  # `MODEL: luna` is the bulk tier and names no executor, so a brief keeps
-  # working when CODEX_DIRECTOR_EXECUTOR switches the default to qoder.
-  if [ "$MODEL" = luna ]; then
-    case "$EXECUTOR" in codex) MODEL=gpt-6-luna; EFFORT="${EFFORT:-max}" ;; qoder) MODEL=dfmodel ;; esac
-  fi
 
   local CMD=() FOCUS CAND
   case "$MODE" in

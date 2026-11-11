@@ -152,7 +152,7 @@ NAME: worker answer subcommand
 
 ### Executors
 
-`EXECUTOR` picks which agent runs a task-class mode (`investigate`, `implement`, `continue`). The script defaults to `$CODEX_DIRECTOR_EXECUTOR`, else `codex`; `review` and `adversarial-review` stay on Codex unless the brief names an executor. The skill explicitly routes all frontend work to Antigravity (`agy`), whose specialty is frontend design and implementation: pages, components, styles, interactions, debugging, verification and frontend reviews, including small changes. Frontend reviews use `investigate` with a read-only brief; mixed tasks give agy the frontend part. Other tasks use Codex on its configured model, with `MODEL: luna` for bulk mechanical work whose result tests or the diff can confirm. `CODEX_DIRECTOR_EXECUTOR=qoder` can change the default executor for other work when needed.
+`EXECUTOR` picks which agent runs a task-class mode (`investigate`, `implement`, `continue`). The script defaults to `$CODEX_DIRECTOR_EXECUTOR`, else `codex`; `review` and `adversarial-review` stay on Codex unless the brief names an executor. The skill explicitly routes all frontend work to Antigravity (`agy`), whose specialty is frontend design and implementation: pages, components, styles, interactions, debugging, verification and frontend reviews, including small changes. Frontend reviews use `investigate` with a read-only brief; mixed tasks give agy the frontend part. Other tasks use Codex on its configured model. `CODEX_DIRECTOR_EXECUTOR=qoder` can change the default executor for other work when needed.
 
 | EXECUTOR | Agent | Extra headers |
 |---|---|---|
@@ -179,7 +179,7 @@ ln -s "$PWD/skills/codex-executor" ~/.gemini/antigravity-cli/skills/codex-execut
 
 The directory link includes `scripts/context.sh` and keeps the installed skill synchronized with this checkout. A new Antigravity session discovers it.
 
-`MODEL` names the executor's own model; `MODEL: luna` is the one name that works on both: `gpt-6-luna` at `max` effort on Codex, `dfmodel` on Qoder. A Qoder task without `MODEL` runs on the default model in Qoder's own settings. Qoder runs in its `yolo` permission mode unless `EXECUTOR_MODE` says otherwise, so a dispatched task never stalls on a prompt no human is watching.
+`MODEL` names the executor's own model. A Qoder task without `MODEL` runs on the default model in Qoder's own settings. Qoder runs in its `yolo` permission mode unless `EXECUTOR_MODE` says otherwise, so a dispatched task never stalls on a prompt no human is watching.
 
 `review` and `adversarial-review` stay Codex-only; the worker refuses them with another executor. A non-Codex agent has no `request_user_input` or `notify_director`, so the director note leaves both out for it.
 
