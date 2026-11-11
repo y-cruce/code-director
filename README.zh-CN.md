@@ -152,7 +152,7 @@ NAME: worker 回答子命令
 
 ### 执行器
 
-`EXECUTOR` 决定谁来跑 task 类模式（`investigate`、`implement`、`continue`）。脚本默认取 `$CODEX_DIRECTOR_EXECUTOR`，没设就是 `codex`。技能将所有前端工作交给擅长前端设计和实现的 Antigravity（`agy`）：页面、组件、样式、交互、排障、验证和前端评审都包括在内，小改动也一样。前端评审使用 `investigate` 配只读任务书，前后端混合任务把前端部分交给 agy。其他任务使用 Codex 配置里的模型；结果靠测试或 diff 就能核对的批量机械改动写 `MODEL: luna`。需要时可设 `CODEX_DIRECTOR_EXECUTOR=qoder` 切换其他任务的默认执行器。
+`EXECUTOR` 决定谁来跑 task 类模式（`investigate`、`implement`、`continue`）。脚本默认取 `$CODEX_DIRECTOR_EXECUTOR`，没设就是 `codex`；`review` 和 `adversarial-review` 在任务书没写执行器时仍走 Codex。技能将所有前端工作交给擅长前端设计和实现的 Antigravity（`agy`）：页面、组件、样式、交互、排障、验证和前端评审都包括在内，小改动也一样。前端评审使用 `investigate` 配只读任务书，前后端混合任务把前端部分交给 agy。其他任务使用 Codex 配置里的模型；结果靠测试或 diff 就能核对的批量机械改动写 `MODEL: luna`。需要时可设 `CODEX_DIRECTOR_EXECUTOR=qoder` 切换其他任务的默认执行器。
 
 | EXECUTOR | 执行者 | 额外头部 |
 |---|---|---|

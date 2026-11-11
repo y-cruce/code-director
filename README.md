@@ -152,7 +152,7 @@ NAME: worker answer subcommand
 
 ### Executors
 
-`EXECUTOR` picks which agent runs a task-class mode (`investigate`, `implement`, `continue`). The script defaults to `$CODEX_DIRECTOR_EXECUTOR`, else `codex`. The skill explicitly routes all frontend work to Antigravity (`agy`), whose specialty is frontend design and implementation: pages, components, styles, interactions, debugging, verification and frontend reviews, including small changes. Frontend reviews use `investigate` with a read-only brief; mixed tasks give agy the frontend part. Other tasks use Codex on its configured model, with `MODEL: luna` for bulk mechanical work whose result tests or the diff can confirm. `CODEX_DIRECTOR_EXECUTOR=qoder` can change the default executor for other work when needed.
+`EXECUTOR` picks which agent runs a task-class mode (`investigate`, `implement`, `continue`). The script defaults to `$CODEX_DIRECTOR_EXECUTOR`, else `codex`; `review` and `adversarial-review` stay on Codex unless the brief names an executor. The skill explicitly routes all frontend work to Antigravity (`agy`), whose specialty is frontend design and implementation: pages, components, styles, interactions, debugging, verification and frontend reviews, including small changes. Frontend reviews use `investigate` with a read-only brief; mixed tasks give agy the frontend part. Other tasks use Codex on its configured model, with `MODEL: luna` for bulk mechanical work whose result tests or the diff can confirm. `CODEX_DIRECTOR_EXECUTOR=qoder` can change the default executor for other work when needed.
 
 | EXECUTOR | Agent | Extra headers |
 |---|---|---|

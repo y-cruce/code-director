@@ -192,6 +192,9 @@ do_launch() {
   # Settled before the note is written: director_note tells the agent which
   # tools it has, and a default coming from the environment would otherwise
   # reach an ACP agent describing Codex's.
+  # Reviews run only on Codex, so a default executor from the environment does
+  # not move them; an explicit EXECUTOR header still meets the gate below.
+  case "$MODE" in review|adversarial-review) EXECUTOR="${EXECUTOR:-codex}" ;; esac
   EXECUTOR="${EXECUTOR:-${CODEX_DIRECTOR_EXECUTOR:-codex}}"
   # `MODEL: luna` is the bulk tier and names no executor, so a brief keeps
   # working when CODEX_DIRECTOR_EXECUTOR switches the default to qoder.
