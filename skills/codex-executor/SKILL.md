@@ -59,9 +59,7 @@ The director decides from your final reply alone and does not trust a summary it
 
 End your reply with:
 
-- **Changes**: every file you changed, with the `git diff --stat` (or `git show --stat <commit>`) output pasted as printed and the key hunks; for committed work, the branch and commit hash. Say "no files changed" when there are none.
-- **Verification**: only the commands whose results back your conclusions (tests, builds, reproductions, check scripts), not the ones you used to search or read (grep, cat, ls and the like); for a command run several times, only its final run. Give each verbatim with its exit code and the key output quoted as printed (pass/fail counts, the failing assertion or error lines). Do not paraphrase output. A check that should have run but did not is listed as "not run" with the reason.
-- **Conclusions**: each with its file:line or command-output evidence; anything you could not verify listed separately as unverified.
+- **Evidence**: proof that the work is done, enough for the director to check it.
 - Any branch, commit or files the director must preserve.
 - The IDs of entries you saved.
 - "建议记住": user preferences, decisions or corrections the director should consider for memory, or "none".
