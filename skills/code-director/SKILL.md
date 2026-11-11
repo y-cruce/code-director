@@ -39,19 +39,19 @@ Fill `mode`, `name`, `cwd` and `brief` every time, and other fields only when a 
 |---|---|---|
 | Answer a question, locate code, find a root cause | `investigate` | Read-only intent goes in the brief |
 | Implement a change from requirements | `implement` | |
-| Anything further on a problem that already has a thread | `continue` | `thread` required; writes files only with `write: true` |
+| Anything further on a problem that already has a thread | `continue` | `thread` required; restores its executor and ACP launch configuration |
 | Standard code review | `review` | Prefer `base`; see "Reviews" |
 | Challenge the approach and assumptions | `adversarial-review` | The brief is the focus text; prefer `base` |
 
 **Frontend routing.** Antigravity (`agy`) specializes in frontend work. Send all frontend design, pages, components, styling, interactions, debugging and verification to it by default, using `executor: "agy"` (equivalent to `"antigravity"`), including small tasks. For frontend reviews, use `mode: "investigate"` with a read-only review brief, because ACP has no native review mode. Split mixed frontend/backend work so agy owns the frontend part. Continue an existing agy session for follow-ups. A later explicit user choice of executor takes precedence.
 
-**Model and effort.** For other tasks, Codex runs on its configured model and effort, so leave `model`, `effort` and `executor` empty. Set `effort` only for a problem a round at the configured level came back unclear on, or one known to be non-deterministic (concurrency, ordering, intermittent failures). Escalate with `continue` in the same thread so Codex keeps what it already read; the thread stays at that level afterwards.
+**Executor, model and effort.** Omitting `executor` uses `$CODEX_DIRECTOR_EXECUTOR`, else Codex. When Codex is required, explicitly set `executor: "codex"`. Reviews use Codex regardless of that default. A `continue` restores the thread's original executor, command and arguments; omit `executor`, or supply the same one. A mismatch is rejected. Leave model and effort unset to keep the executor's configuration. Set Codex `effort` only to escalate an unclear or non-deterministic problem; continue the same thread. ACP uses `executor_effort`; a new agy session defaults to Carbon high or Opus medium in the driver, and continuation keeps its existing effort unless explicitly changed.
 
-Outside the frontend routing above, set `executor` or `model` otherwise only when the user names one. For qoder, dsh, Antigravity or another ACP agent, read `references/executors.md` first: native reviews and several controls are unavailable.
+For qoder, dsh, Antigravity or another ACP agent, read `references/executors.md` first for its available controls. Read-only intent belongs in the brief: default full access permits writes even without `write: true`. Codex's explicit sandbox settings are enforced by Codex; ACP uses the agent's own modes and permissions, not those sandbox flags.
 
 **Antigravity / agy.** `antigravity` is the executor's canonical name; `agy` is an equivalent alias. Accept either from the user and in the `executor` field. If the installed dispatch tool's schema offers neither value, use its existing `executor: "acp"` with `executor_command` set to the absolute path of `agy_acp_server.par` / `agy_acp_server`, `executor_args: []` and `executor_permissions: "allow-once"`. The Bash route accepts both `EXECUTOR: antigravity` and `EXECUTOR: agy` directly. Both launch the same official ACP server and can continue the same session. See `references/executors.md` for setup and session continuation.
 
-**What Codex is told.** For `investigate` and `implement`, dispatch.sh prepends a note saying a director started the task, that `request_user_input` questions and `notify_director` notes go to you, and that the `codex-executor` skill holds its working rules, shared-context steps and reply format. dispatch.sh also appends a "最终回报要求" block to every `investigate`, `implement` and `continue` prompt, requiring the final reply to carry evidence that the work is done. Leave all of that out of the brief. Tasks never talk to each other, so you are the only relay: when a new task overlaps a running one, send the running one a one-line `message` saying what started, and list it in the new task's `siblings`.
+**What executors are told.** For `investigate` and `implement`, dispatch.sh prepends the director note and executor skill entry. Codex uses `request_user_input` and `notify_director`; ACP sends notes with `node "$CODEX_ACP_COMPANION_PATH" notify-director "message"`. agy and Qoder use native questions; dsh uses the blocking `ask-director` command from the skill. The "最终回报要求" footer follows every task and continue brief. Leave that boilerplate out of your brief. Tasks never talk to each other: relay relevant findings and list overlapping tasks in `siblings`.
 
 **Parallel writes.** Only one writer works in a checkout at a time, you included. Give each parallel route that writes files its own worktree, created before dispatch and passed as `cwd`; read `references/worktrees.md` to create and remove them.
 
@@ -87,7 +87,7 @@ Nothing waits on a job, and a job may run for any length of time; slowness is no
 
 A job a subagent dispatched reports to that subagent, which handles it with the same tools. When the host refuses that delivery (for example, the user stopped the subagent), the event comes to you with a line naming the subagent; handle it or relay it.
 
-Events wake you by themselves, so a quiet job needs nothing. On a check-in, or when the user asks how things are going, answer from the events you have received. Call `mcp__codex__status` with `job` only when an answer reports `still pending after answer`, a question event lacks `ids=` or ends cut with `…`, the user asks about one job, or a job you expect to be over has sent nothing. `detail: true` returns tens of thousands of characters and is only for debugging the plugin.
+Events wake you by themselves. After 15 minutes without events or progress, check the job's `ownerAlive` and `lastProgressAt`; `updatedAt` is auxiliary and `phase` does not prove liveness. Also check status for `still pending after answer`, incomplete question IDs/text, or a user status request. `detail: true` is for debugging. Two-minute question reminders run only in Monitor mode; confirmed direct push has no periodic reminders.
 
 ### Steering a running job
 
@@ -101,7 +101,7 @@ Corrections to running work default to steering in the same job, thread and turn
 | End the job | `mcp__codex__cancel`; TaskStop cannot stop a Codex job |
 | A new round after the job finished | Dispatch `continue` |
 
-`MESSAGED` means submitted, not yet followed; acceptance also does not prove model execution. If steering is unsupported or returns `TURN_NOT_ACTIVE`/`promptRequired`, check `status` and choose by intent: queue for a later turn, interrupt to stop active work, or continue a finished job. Do not automatically resend a failed steer as queue. See `references/executors.md` for the agent-specific capability and receipt details. A failed interrupt may already have cancelled the turn, so check `status` before resending. While a structured question is open, messages are refused: answer it first. An interrupt keeps the job's original write permission, so it cannot turn a read-only task into a writing one.
+`MESSAGED` confirms submission, not model execution. If steering is unsupported or returns `TURN_NOT_ACTIVE`/`promptRequired`, choose queue for a later turn, interrupt to stop active work, or continue a finished job; do not automatically resend as queue. Active ACP queue returns a new `queuedJobId` per instruction; active Codex queue runs the combined queued input in the same job. Idle queue starts a new job for either. Pending questions refuse steer but allow queue. A failed interrupt may already have cancelled the turn: check status before resending. ACP interrupt retains edits but returns no partial file list; inspect the assigned checkout. It retains the task's existing access settings. DSH steering requires its installed extension.
 
 ### Answering questions
 

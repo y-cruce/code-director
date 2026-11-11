@@ -85,6 +85,10 @@ EOF
     cat <<'EOF'
 - When you need a decision, missing information, or authorization, call request_user_input. The director answers it from the question alone, without your trace: write the question as a short paragraph with where you are, what you found (file:line), why it blocks you, and what you will do meanwhile, and give each option its consequence, recommended first. The tool's "single sentence" hint does not apply here.
 EOF
+  elif [ "$EXECUTOR" = dsh ]; then
+    cat <<'EOF'
+- This dsh profile has no native question tool. Run node "$CODEX_ACP_COMPANION_PATH" ask-director --question "question" --options '["First option","Second option"]' to wait for the director. Set bash timeoutMs:600000 (default 120000 ms, usual cap 600000 ms). If promoted to a background job, collect that same job with job_output. The answer is printed to stdout; cancellation or the 10-minute deadline exits nonzero. A shell without job promotion may kill it first: report that and check the pending question, never infer an answer or retry it.
+EOF
   else
     cat <<'EOF'
 - When you need a decision, missing information, or authorization, ask for it however this agent asks the user. The director answers it from the question alone, without your trace: say where you are, what you found (file:line), why it blocks you, the options with their consequences (recommended first), and what you will do meanwhile.
@@ -93,6 +97,10 @@ EOF
   if { [ -z "$EXECUTOR" ] || [ "$EXECUTOR" = codex ]; } && grep -rq 'notify_director' "$(dirname "$CC")"; then
     cat <<'EOF'
 - notify_director(message) sends a one-line note to the director without stopping your work. Use it only when the director must act while you keep working (a blocker it has to clear, a decision or scope change it must approve, a finding that makes the brief wrong), or when another running task needs something you learned and the director has to relay it. Never send progress, finished steps, or findings that only feed your final answer; the director runs many tasks and every note costs its context. The director does not reply through this tool.
+EOF
+  elif grep -q 'notify-director' "$CC"; then
+    cat <<'EOF'
+- To notify the director while continuing work, run: node "$CODEX_ACP_COMPANION_PATH" notify-director "message". Use this only for a blocker or decision the director must act on now, or a finding another running task needs. Do not send progress or findings that belong in your final reply. Messages must be nonempty and at most 400 characters. This command does not return a director answer.
 EOF
   fi
   cat <<EOF
@@ -190,8 +198,14 @@ do_launch() {
   # reach an ACP agent describing Codex's.
   # Reviews run only on Codex, so a default executor from the environment does
   # not move them; an explicit EXECUTOR header still meets the gate below.
-  case "$MODE" in review|adversarial-review) EXECUTOR="${EXECUTOR:-codex}" ;; esac
-  EXECUTOR="${EXECUTOR:-${CODEX_DIRECTOR_EXECUTOR:-codex}}"
+  local RESUME_ORIGINAL=0
+  if [ "$MODE" = continue ] && grep -q 'executor-preset' "$CC"; then
+    [ -n "$THREAD" ] || { echo 'THREAD_REQUIRED: continue requires the original thread id'; exit 1; }
+    RESUME_ORIGINAL=1
+  else
+    case "$MODE" in review|adversarial-review) EXECUTOR="${EXECUTOR:-codex}" ;; esac
+    EXECUTOR="${EXECUTOR:-${CODEX_DIRECTOR_EXECUTOR:-codex}}"
+  fi
 
   local CMD=() FOCUS CAND
   case "$MODE" in
@@ -240,18 +254,31 @@ do_launch() {
   esac
   # --model is Codex's; for another executor MODEL names that agent's own model
   # and is passed as --executor-model below.
-  [ -n "$MODEL" ] && [ "$EXECUTOR" = codex ] && CMD+=(--model "$MODEL")
+  if [ "$RESUME_ORIGINAL" = 1 ]; then
+    # The companion resolves the stored transport, command and arguments before
+    # applying explicit overrides. Defaults from this shell must not reroute it.
+    [ -n "$EXECUTOR" ] && CMD+=(--executor-preset "$EXECUTOR")
+    [ -n "$MODEL" ] && CMD+=(--model "$MODEL")
+    [ -n "$EXECUTOR_COMMAND" ] && CMD+=(--executor-command "$EXECUTOR_COMMAND")
+    [ -n "$EXECUTOR_ARGS" ] && CMD+=(--executor-args "$EXECUTOR_ARGS")
+    [ -n "$EXECUTOR_MODE" ] && CMD+=(--executor-mode "$EXECUTOR_MODE")
+    [ -n "$EXECUTOR_PERMISSIONS" ] && CMD+=(--executor-permissions "$EXECUTOR_PERMISSIONS")
+    [ -n "$EXECUTOR_EFFORT" ] && CMD+=(--executor-effort "$EXECUTOR_EFFORT")
+  else
+    [ -n "$MODEL" ] && [ "$EXECUTOR" = codex ] && CMD+=(--model "$MODEL")
+    if [ "${CMD[2]:-}" = task ] && grep -q 'executor-preset' "$CC"; then CMD+=(--executor-preset "$EXECUTOR"); fi
+  fi
 
   # EXECUTOR picks which agent runs the task. `codex` (the default) keeps every
   # existing flag; `qoder`, `dsh` and `antigravity` select ACP launch presets, and `acp` is
   # any other ACP agent, which then needs EXECUTOR_COMMAND.
-  if [ "$EXECUTOR" = codex ] && [ "${CMD[2]:-}" = task ] && grep -q 'executor-command' "$CC"; then
+  if [ "$RESUME_ORIGINAL" = 0 ] && [ "$EXECUTOR" = codex ] && [ "${CMD[2]:-}" = task ] && grep -q 'executor-command' "$CC"; then
     # Named rather than left to the companion's default, which reads
     # $CODEX_COMPANION_EXECUTOR: an inherited value would otherwise quietly
     # overrule a brief that asked for Codex.
     CMD+=(--executor codex)
   fi
-  if [ "$EXECUTOR" != codex ]; then
+  if [ "$RESUME_ORIGINAL" = 0 ] && [ "$EXECUTOR" != codex ]; then
     # Gate on the mode that was asked for, not on the command that was built:
     # a review with more than three untracked files is rebuilt as a task, which
     # would otherwise let a review through to an agent that must not run one.
@@ -299,7 +326,6 @@ do_launch() {
         # DSH exposes one-shot permissions, not Qoder's yolo session mode.
         EXECUTOR_PERMISSIONS="${EXECUTOR_PERMISSIONS:-allow-once}" ;;
       antigravity|agy)
-        EXECUTOR_EFFORT="${EXECUTOR_EFFORT:-${CODEX_DIRECTOR_EXECUTOR_EFFORT:-high}}"
         EXECUTOR_COMMAND="${EXECUTOR_COMMAND:-${CODEX_DIRECTOR_ANTIGRAVITY_COMMAND:-}}"
         if [ -z "$EXECUTOR_COMMAND" ]; then
           EXECUTOR_COMMAND=$(command -v agy_acp_server.par || command -v agy_acp_server || true)
@@ -337,8 +363,11 @@ do_launch() {
     # model the agent ends up on, and only the agent knows them: qoder's
     # ultimate has xhigh, its dfmodel stops at max. So the intent goes out as
     # written and the driver settles it against the options it actually reports.
-    EXECUTOR_EFFORT="${EXECUTOR_EFFORT:-${CODEX_DIRECTOR_EXECUTOR_EFFORT:-xhigh}}"
-    CMD+=(--executor-effort "$EXECUTOR_EFFORT")
+    case "$EXECUTOR" in
+      antigravity|agy) EXECUTOR_EFFORT="${EXECUTOR_EFFORT:-${CODEX_DIRECTOR_EXECUTOR_EFFORT:-}}" ;;
+      *) EXECUTOR_EFFORT="${EXECUTOR_EFFORT:-${CODEX_DIRECTOR_EXECUTOR_EFFORT:-xhigh}}" ;;
+    esac
+    [ -n "$EXECUTOR_EFFORT" ] && CMD+=(--executor-effort "$EXECUTOR_EFFORT")
     # --effort above is Codex's; rebuild without it so the agent is not handed
     # both (unset would leave holes that set -u then trips over).
     local kept=() skip=0 arg

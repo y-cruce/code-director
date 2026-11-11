@@ -146,17 +146,17 @@ NAME: worker answer subcommand
 |---|---|---|
 | `investigate` | Read code, trace call chains, find root causes | No |
 | `implement` | Implement according to the brief | Yes |
-| `continue` | Continue the previous Codex thread | Only with `WRITE: yes` in the header |
+| `continue` | Continue the original executor's thread | Brief intent; default full access already permits writes |
 | `review` | The plugin's standard review | No |
 | `adversarial-review` | Challenge-style review; the body is the focus text | No |
 
 ### Executors
 
-`EXECUTOR` picks which agent runs a task-class mode (`investigate`, `implement`, `continue`). The script defaults to `$CODEX_DIRECTOR_EXECUTOR`, else `codex`; `review` and `adversarial-review` stay on Codex unless the brief names an executor. The skill explicitly routes all frontend work to Antigravity (`agy`), whose specialty is frontend design and implementation: pages, components, styles, interactions, debugging, verification and frontend reviews, including small changes. Frontend reviews use `investigate` with a read-only brief; mixed tasks give agy the frontend part. Other tasks use Codex on its configured model. `CODEX_DIRECTOR_EXECUTOR=qoder` can change the default executor for other work when needed.
+`EXECUTOR` selects a new task's agent; omitted uses `$CODEX_DIRECTOR_EXECUTOR`, else Codex. Select `executor: "codex"` explicitly when needed. Reviews ignore that default and use Codex. `continue` restores its thread's original executor, ACP command and arguments; a conflicting explicit executor is rejected. The skill routes frontend work to agy; frontend reviews use read-only `investigate`.
 
 | EXECUTOR | Agent | Extra headers |
 |---|---|---|
-| `codex` (default) | Codex through the plugin's app-server | — |
+| `codex` (fallback without an environment default) | Codex through the plugin's app-server | — |
 | `qoder` | qodercli over ACP; the binary is found on PATH, then `~/.qoder/entry/qoder`, or `CODEX_DIRECTOR_QODER_COMMAND` | `EXECUTOR_MODE` (a Qoder session mode, e.g. `yolo`) |
 | `dsh` | DeepSeek Harness over ACP (`dsh --profile acp`); override its executable with `EXECUTOR_COMMAND` or `CODEX_DIRECTOR_DSH_COMMAND` | `EXECUTOR_ARGS`, `EXECUTOR_PERMISSIONS` (`allow-once` by default, or `ask`) |
 | `antigravity` (alias `agy`) | Google's official `agy_acp_server.par` / `agy_acp_server`; found on PATH, then `~/.local/bin/agy_acp_server.par`, or overridden with `EXECUTOR_COMMAND` / `CODEX_DIRECTOR_ANTIGRAVITY_COMMAND` | `EXECUTOR_ARGS`, `EXECUTOR_MODE`, `EXECUTOR_PERMISSIONS` (`allow-once` by default, or `ask`) |
@@ -181,7 +181,9 @@ The directory link includes `scripts/context.sh` and keeps the installed skill s
 
 `MODEL` names the executor's own model. A Qoder task without `MODEL` runs on the default model in Qoder's own settings. Qoder runs in its `yolo` permission mode unless `EXECUTOR_MODE` says otherwise, so a dispatched task never stalls on a prompt no human is watching.
 
-`review` and `adversarial-review` stay Codex-only; the worker refuses them with another executor. A non-Codex agent has no `request_user_input` or `notify_director`, so the director note leaves both out for it.
+`review` and `adversarial-review` stay Codex-only. ACP agents send notes with `node "$CODEX_ACP_COMPANION_PATH" notify-director "message"`. agy/Qoder ask natively; dsh uses the blocking `ask-director --question "Question" --options '["First","Second"]'` subcommand on the same companion. It prints the answer, accepts free text, and exits nonzero on cancellation or the ten-minute deadline. DSH bash uses `timeoutMs:600000`; collect the same job with `job_output` if promoted to background. New agy sessions default to Carbon high / Opus medium; continue keeps the existing effort unless explicitly changed.
+
+Read-only is brief intent under default full access; ACP permissions follow the agent's modes, not Codex sandbox flags. Active ACP queue returns a separate job id, active Codex queue stays in the same job, and idle queue creates a new job for either. Pending questions reject steer but allow queue. ACP interrupt retains files without a partialChanges report. DSH steer needs its extension; periodic question reminders run only in Monitor mode. agy new/resume add HOME to file-tool scope and locally exclude only its untracked generated `/skills/system/run-workflow/SKILL.md` through Git's `info/exclude`.
 
 Required header: `NAME` is a few words describing the task, truncated to 80 characters. It appears after `JOB:` in dispatch/collect output and, with a plugin supporting `task --label`, beside the job ID in status and events; older plugins print a note and launch without the label. Review commands carry the label as well.
 
@@ -244,7 +246,7 @@ Corrections to running work default to steering in the same job, thread and turn
 
 For automatic corrections, run `bash ~/.claude/skills/code-director/scripts/dispatch.sh message <job-id> <prompt-file> --cwd <repo> [--interrupt|--queue]`: success prints only `MESSAGED job=<id>` (with `queued=<id>` appended for `--queue`: the job the queued turn will run as); failure prints `MESSAGE_FAILED job=<id> <reason>` and exits nonzero; an unsupported plugin prints `MESSAGE_UNSUPPORTED:` and exits 2. There is no relay agent: the director sends every correction through this worker call. The two flags are two different intents and cannot be combined: `--interrupt` when the current turn must stop, `--queue` when the correction should become the next turn once this one ends. Both work on Codex and on an ACP agent. With no flag, delivery requires the executor's `midTurnSteer` capability: Codex supports it; Qoder uses its private ACP prompt queueing capability, and DSH/agy can advertise the steering extension. Plugin 1.4.103 includes the agy proxy at `<plugin-root>/scripts/agy-acp/acp-proxy.mjs`; see its `README.md` for setup.
 
-A new round on the same problem is another `dispatch` with `MODE: continue` and its `THREAD:`. If a structured question is pending, answer it through `answer` before sending an ordinary message; the worker refuses messages while that request is open.
+A new round on the same problem is another `dispatch` with `MODE: continue` and its `THREAD:`. Pending questions refuse steer; answer through `answer`. Explicit queue remains available for later instructions.
 
 For a structured question, the director receives a `question_opened` channel event with the request id, question ids, full text and options while Codex remains active. It supplies an answers-map JSON file, such as `{"<question-id>":{"answers":["..."]}}`, through `/codex:answer <job-id> --request-id <id> --answers-file <path>`, using those question IDs as keys. Answered requests are excluded from replay; if an event stream reports `QUESTION_PENDING`, check status before answering again. Questions time out after 10 minutes. `/codex:status <job-id>` exposes pending messages, questions, notifications, and interruption state.
 

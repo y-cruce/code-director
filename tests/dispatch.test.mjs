@@ -14,13 +14,13 @@ test("ACP presets start and continue without inheriting Qoder modes or models", 
   const companion = path.join(cwd, "companion.mjs");
   const recording = path.join(cwd, "args.json");
   fs.writeFileSync(companion, `import fs from "node:fs";
-// Capability markers: executor-command "executor-permissions" "label" "thread" danger-full-access case "message":
+// Capability markers: executor-command executor-preset notify-director "executor-permissions" "label" "thread" danger-full-access case "message":
 if (process.argv[2] === "status") {
   if (JSON.parse(fs.readFileSync(process.env.RECORDING, "utf8")).includes("--thread")) process.exit(1);
   console.log(JSON.stringify({ job: { id: "task-test", status: "running", threadId: "session-test" } }));
 }
 else {
-  if (process.env.CODEX_COMPANION_ACP_MODE || process.env.CODEX_COMPANION_ACP_MODEL) throw new Error("Preset inherited a generic ACP mode/model");
+  if (!process.argv.includes("--thread") && (process.env.CODEX_COMPANION_ACP_MODE || process.env.CODEX_COMPANION_ACP_MODEL)) throw new Error("Preset inherited a generic ACP mode/model");
   fs.writeFileSync(process.env.RECORDING, JSON.stringify(process.argv.slice(2))); console.log(JSON.stringify({ jobId: "task-test" }));
 }
 `);
@@ -39,17 +39,33 @@ else {
       assert.match(result.stdout, /THREAD: session-test/);
       const args = JSON.parse(fs.readFileSync(recording, "utf8"));
       const value = flag => args[args.indexOf(flag) + 1];
-      assert.equal(value("--executor"), "acp");
-      assert.equal(value("--executor-command"), command);
+      assert.equal(value("--executor-preset"), executor);
+      if (mode === "continue") assert.equal(args.includes("--executor"), false, "transport comes from the thread");
+      else {
+        assert.equal(value("--executor"), "acp");
+        assert.equal(value("--executor-command"), command);
+      }
       assert.deepEqual(JSON.parse(value("--executor-args")), mode === "continue" ? ["--debug"] : launchArgs);
       assert.equal(value("--executor-permissions"), mode === "continue" ? "ask" : "allow-once");
-      assert.equal(value("--executor-effort"), mode === "continue" ? "low" : executor === "dsh" ? "xhigh" : "high");
+      if (mode === "continue" || executor === "dsh") assert.equal(value("--executor-effort"), mode === "continue" ? "low" : "xhigh");
+      else assert.equal(args.includes("--executor-effort"), false, "agy new-session effort belongs to the driver");
       assert.equal(args.includes("--executor-mode"), false);
       assert.equal(args.includes("--executor-model"), false);
       if (mode === "continue") assert.equal(value("--thread"), "session-test");
       const prompt = fs.readFileSync(value("--prompt-file"), "utf8");
       assert.match(prompt, /---- 最终回报要求 ----/);
       assert.ok(prompt.indexOf("Continue the work.") < prompt.indexOf("最终回报要求"), "evidence requirement follows the brief");
+      if (mode === "investigate") {
+        assert.match(prompt, /notify-director/);
+        if (executor === "dsh") assert.match(prompt, /ask-director/);
+      }
     }
+  }
+  const result = spawnSync("bash", [SCRIPT, "dispatch"], { cwd, env: { ...env, CODEX_DIRECTOR_EXECUTOR: "agy" }, encoding: "utf8",
+    input: `MODE: continue\nNAME: original executor\nCWD: ${cwd}\nTHREAD: codex-thread\n\nContinue.\n` });
+  assert.equal(result.status, 0, result.stdout + result.stderr);
+  const args = JSON.parse(fs.readFileSync(recording, "utf8"));
+  for (const flag of ["--executor", "--executor-preset", "--executor-command", "--executor-args", "--executor-effort"]) {
+    assert.equal(args.includes(flag), false, `continue must not supply a default ${flag}`);
   }
 });
