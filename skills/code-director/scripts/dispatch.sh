@@ -86,9 +86,15 @@ EOF
 - When you need a decision, missing information, or authorization, call request_user_input. The director answers it from the question alone, without your trace: write the question as a short paragraph with where you are, what you found (file:line), why it blocks you, and what you will do meanwhile, and give each option its consequence, recommended first. The tool's "single sentence" hint does not apply here.
 EOF
   elif [ "$EXECUTOR" = dsh ]; then
-    cat <<'EOF'
+    if grep -q 'ask-director' "$CC"; then
+      cat <<'EOF'
 - This dsh profile has no native question tool. Run node "$CODEX_ACP_COMPANION_PATH" ask-director --question "question" --options '["First option","Second option"]' to wait for the director. Set bash timeoutMs:600000 (default 120000 ms, usual cap 600000 ms). If promoted to a background job, collect that same job with job_output. The answer is printed to stdout; cancellation or the 10-minute deadline exits nonzero. A shell without job promotion may kill it first: report that and check the pending question, never infer an answer or retry it.
 EOF
+    else
+      cat <<'EOF'
+- This dsh profile has no question tool. When a decision or missing fact blocks the task, put the question, evidence and options in your final reply and stop. The director answers by continuing this thread.
+EOF
+    fi
   else
     cat <<'EOF'
 - When you need a decision, missing information, or authorization, ask for it however this agent asks the user. The director answers it from the question alone, without your trace: say where you are, what you found (file:line), why it blocks you, the options with their consequences (recommended first), and what you will do meanwhile.
@@ -98,7 +104,7 @@ EOF
     cat <<'EOF'
 - notify_director(message) sends a one-line note to the director without stopping your work. Use it only when the director must act while you keep working (a blocker it has to clear, a decision or scope change it must approve, a finding that makes the brief wrong), or when another running task needs something you learned and the director has to relay it. Never send progress, finished steps, or findings that only feed your final answer; the director runs many tasks and every note costs its context. The director does not reply through this tool.
 EOF
-  elif grep -q 'notify-director' "$CC"; then
+  elif [ "$EXECUTOR" != codex ] && grep -q 'notify-director' "$CC"; then
     cat <<'EOF'
 - To notify the director while continuing work, run: node "$CODEX_ACP_COMPANION_PATH" notify-director "message". Use this only for a blocker or decision the director must act on now, or a finding another running task needs. Do not send progress or findings that belong in your final reply. Messages must be nonempty and at most 400 characters. This command does not return a director answer.
 EOF
@@ -203,6 +209,10 @@ do_launch() {
     [ -n "$THREAD" ] || { echo 'THREAD_REQUIRED: continue requires the original thread id'; exit 1; }
     RESUME_ORIGINAL=1
   else
+    if [ "$MODE" = continue ] && [ -z "$EXECUTOR" ]; then
+      echo 'EXECUTOR_REQUIRED: this companion cannot restore the thread executor. Reload an updated plugin or explicitly set EXECUTOR to the original executor.'
+      exit 1
+    fi
     case "$MODE" in review|adversarial-review) EXECUTOR="${EXECUTOR:-codex}" ;; esac
     EXECUTOR="${EXECUTOR:-${CODEX_DIRECTOR_EXECUTOR:-codex}}"
   fi

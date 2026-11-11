@@ -36,6 +36,8 @@ Install the shared `codex-executor` skill under `~/.gemini/antigravity-cli/skill
 
 **ACP steering extensions.** A server advertises these at the initialize response's top-level `_meta.steering.supported: true`. The plugin sends `_session/steering` with the current session, prompt and `_meta.steering.idleBehavior: "promptRequired"`. `injected` confirms insertion, not model consumption; `promptRequired` consumes nothing and asks the client to deliver a normal prompt later. A null or unrecognized outcome does not establish insertion. Unmodified DSH/Antigravity servers lack this advertisement; their local extensions must be installed before this route is available.
 
+The task-control endpoint is exposed in the ACP executor's environment and permits answer and approval calls; this relies on the executor not invoking those interfaces on its own.
+
 Plugin 1.4.103 includes Antigravity's proxy at `<plugin-root>/scripts/agy-acp/acp-proxy.mjs`; select that executable through `executor_command` or `CODEX_DIRECTOR_ANTIGRAVITY_COMMAND`. It requires the existing official ACP 1.4.4 runtime. Setup details are in the plugin's `scripts/agy-acp/README.md`. DSH's patch is maintained in [dsh-plugins/acp-steering](https://github.com/y-cruce/dsh-plugins/tree/main/acp-steering).
 
 **What you lose off Codex:**

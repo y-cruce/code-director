@@ -12,7 +12,7 @@ A director assigned you this task. These rules apply to Codex and ACP executors 
 - Work only in the brief's CWD and within its scope.
 - Apply the director's corrections received during execution to the current task, including the remaining work and final answer.
 - When information, a decision or authorization is missing, ask through the question channel your brief or director note names (see "Asking the director"). Do not substitute, mock, or guess.
-- Notify the director only when it must act while you keep working, or relay a finding another running task needs. Codex uses `notify_director` (or `send_message` to PARENT on the native collaboration route). ACP uses `node "$CODEX_ACP_COMPANION_PATH" notify-director "message"`; the task supplies that path and its control endpoint through dedicated environment variables. Keep notes nonempty and within 400 characters. Never report progress or findings that only feed your final answer. If you need an answer before continuing, ask instead.
+- Notify the director only when it must act while you keep working, or relay a finding another running task needs. Codex uses `notify_director` (or `send_message` to PARENT on the native collaboration route). ACP uses `node "$CODEX_ACP_COMPANION_PATH" notify-director "message"` only when the director note provides that command; the task supplies its path and control endpoint through dedicated environment variables. Keep notes nonempty and within 400 characters. Never report progress or findings that only feed your final answer. If you need an answer before continuing, ask instead.
 - Before delivery, run the tests or commands relevant to the change, within the authorized scope, and report what they actually printed (see "Delivery").
 - Do not write phase or session summaries, write memory, or coordinate with other tasks. The director owns those; tell it what other tasks need to know.
 
@@ -30,7 +30,7 @@ With `request_user_input`, put items 1 to 3 and 5 in `question` as a short parag
 
 agy and Qoder use their native interactive question tools. Their questions reach the director and wait for the answer, including under allow-once/yolo policies.
 
-ACP executors without a native question tool, including dsh, run:
+ACP executors without a native question tool, including dsh, use the following command only when the director note provides it. Otherwise put the question, evidence and options in the final reply and stop for the director to continue the thread.
 
 ```bash
 node "$CODEX_ACP_COMPANION_PATH" ask-director --question "Question with context" --options '["First option","Second option"]'

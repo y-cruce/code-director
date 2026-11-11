@@ -154,6 +154,8 @@ NAME: worker answer subcommand
 
 `EXECUTOR` selects a new task's agent; omitted uses `$CODEX_DIRECTOR_EXECUTOR`, else Codex. Select `executor: "codex"` explicitly when needed. Reviews ignore that default and use Codex. `continue` restores its thread's original executor, ACP command and arguments; a conflicting explicit executor is rejected. The skill routes frontend work to agy; frontend reviews use read-only `investigate`.
 
+Older companions without `executor-preset` require the original executor explicitly on `continue`; update and reload the plugin for automatic restoration. ACP command instructions are shown only when the selected companion supports them; otherwise dsh puts questions in its final reply.
+
 | EXECUTOR | Agent | Extra headers |
 |---|---|---|
 | `codex` (fallback without an environment default) | Codex through the plugin's app-server | — |

@@ -14,7 +14,7 @@ test("ACP presets start and continue without inheriting Qoder modes or models", 
   const companion = path.join(cwd, "companion.mjs");
   const recording = path.join(cwd, "args.json");
   fs.writeFileSync(companion, `import fs from "node:fs";
-// Capability markers: executor-command executor-preset notify-director "executor-permissions" "label" "thread" danger-full-access case "message":
+// Capability markers: executor-command executor-preset notify-director ask-director "executor-permissions" "label" "thread" danger-full-access case "message":
 if (process.argv[2] === "status") {
   if (JSON.parse(fs.readFileSync(process.env.RECORDING, "utf8")).includes("--thread")) process.exit(1);
   console.log(JSON.stringify({ job: { id: "task-test", status: "running", threadId: "session-test" } }));
@@ -68,4 +68,36 @@ else {
   for (const flag of ["--executor", "--executor-preset", "--executor-command", "--executor-args", "--executor-effort"]) {
     assert.equal(args.includes(flag), false, `continue must not supply a default ${flag}`);
   }
+});
+
+test("older companions omit unavailable ACP commands and require an explicit continue executor", (t) => {
+  const cwd = fs.mkdtempSync(path.join(os.tmpdir(), "legacy-dispatch-test-"));
+  t.after(() => fs.rmSync(cwd, { recursive: true, force: true }));
+  const companion = path.join(cwd, "companion.mjs"), recording = path.join(cwd, "args.json");
+  fs.writeFileSync(companion, `import fs from "node:fs";
+// Capability markers: executor-command "executor-permissions" "label" "thread" danger-full-access case "message":
+if (process.argv[2] === "status") console.log(JSON.stringify({ job: { id: "task-old", status: "running", threadId: "original-thread" } }));
+else { fs.writeFileSync(process.env.RECORDING, JSON.stringify(process.argv.slice(2))); console.log(JSON.stringify({ jobId: "task-old" })); }
+`);
+  const env = { ...process.env, CODEX_COMPANION: companion, RECORDING: recording, TMPDIR: cwd,
+    CLAUDE_CONFIG_DIR: cwd, CODEX_DIRECTOR_EXECUTOR: "agy", CODEX_DIRECTOR_DSH_COMMAND: "/custom/dsh" };
+  delete env.CODEX_COMPANION_TRANSCRIPT_PATH;
+  delete env.CODEX_COMPANION_SESSION_ID;
+  const dispatch = headers => spawnSync("bash", [SCRIPT, "dispatch"], { cwd, env, encoding: "utf8",
+    input: `NAME: legacy capability check\nCWD: ${cwd}\n${headers}\nProceed.\n` });
+  for (const executor of ["dsh", "acp"]) {
+    const result = dispatch(`MODE: investigate\nEXECUTOR: ${executor}\nEXECUTOR_COMMAND: /custom/${executor}\n`);
+    assert.equal(result.status, 0, result.stdout + result.stderr);
+    const args = JSON.parse(fs.readFileSync(recording, "utf8"));
+    const prompt = fs.readFileSync(args[args.indexOf("--prompt-file") + 1], "utf8");
+    assert.doesNotMatch(prompt, /ask-director|notify-director/);
+    if (executor === "dsh") assert.match(prompt, /no question tool.*final reply/);
+  }
+  const refused = dispatch("MODE: continue\nTHREAD: original-thread\n");
+  assert.notEqual(refused.status, 0);
+  assert.match(refused.stdout, /EXECUTOR_REQUIRED:.*Reload an updated plugin.*original executor/);
+  const explicit = dispatch("MODE: continue\nTHREAD: original-thread\nEXECUTOR: dsh\n");
+  assert.equal(explicit.status, 0, explicit.stdout + explicit.stderr);
+  const args = JSON.parse(fs.readFileSync(recording, "utf8"));
+  assert.equal(args[args.indexOf("--executor-command") + 1], "/custom/dsh");
 });
