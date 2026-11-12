@@ -172,7 +172,7 @@ Antigravity 使用 CLI 自带的 `agy acp`（已验证 1.5.6），复用 CLI 登
 
 CLI 原生读取 `~/.gemini/config/mcp_config.json`，包括 `serverUrl` HTTP 配置，无需单独的 helper 或 MCP 字段转换。
 
-1.5.6 迁移尚未通过异步命令验收：命令未结束就可能返回 `end_turn`，1.4.4 对照会等待结束。阻断与回退详情见插件 `scripts/agy-acp/README.md`，是否切换由调度者决定。
+agy 若在命令未完成时返回 `end_turn`，任务会继续等待原生工具状态，结束后在同一 job 自动接续。多次等待共用 30 分钟上限，超时明确列出剩余命令；原生 `IsDaemon: true` 常驻进程不等待。命令运行时拒绝 steer，应按意图选 queue 或 interrupt。详情与回退见插件 `scripts/agy-acp/README.md`。
 
 `agy` 是 `antigravity` 的等价别名，`executor` 字段和 `EXECUTOR` 头部都接受这两种写法，也可交替续接同一会话。技能安装路径是指向本 checkout 的软链接，新开的 Claude Code 会话会读取更新后的技能。旧版插件的工具选项尚无这两个名称时，技能会通过已有的 `executor: "acp"` 调用服务，传入绝对 CLI 路径、`["acp"]` 参数和 `allow-once` 权限；Bash 的两种执行器写法也均可用。
 

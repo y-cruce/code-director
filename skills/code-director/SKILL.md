@@ -103,6 +103,8 @@ Corrections to running work default to steering in the same job, thread and turn
 
 `MESSAGED` confirms submission, not model execution. If steering is unsupported or returns `TURN_NOT_ACTIVE`/`promptRequired`, choose queue for a later turn, interrupt to stop active work, or continue a finished job; do not automatically resend as queue. Active ACP queue returns a new `queuedJobId` per instruction; active Codex queue runs the combined queued input in the same job. Idle queue starts a new job for either. Pending questions refuse steer but allow queue. A failed interrupt may already have cancelled the turn: check status before resending. ACP interrupt retains edits but returns no partial file list; inspect the assigned checkout. It retains the task's existing access settings. DSH's community adapter includes steering and keeps the original prompt open until the turn ends.
 
+agy refuses steer while an execute tool is unfinished; choose queue or interrupt by intent. If agy returns early with finite commands still running, the driver keeps the job running, reads tool statuses, and automatically continues the original task when they finish. These waits share 30 minutes; timeout reports unfinished commands. Native `IsDaemon: true` commands are excluded.
+
 ### Answering questions
 
 A question event carries `request=<id> ids=<id>,...` and every question in full with its options and their consequences. Answer from established facts; ask the user only for a choice or authorization you do not have, and never read permission into a factual answer. When the question does not give you enough to decide, answer in free text naming exactly what Codex must add, and it asks again with that context; do not guess, and do not pass a half-understood choice to the user.

@@ -57,7 +57,7 @@ Install the shared `codex-executor` skill under `~/.gemini/antigravity-cli/skill
 
 **agy steering.** The CLI accepts a concurrent `session/prompt` as input to the active conversation. It settles the previous prompt on steering; the driver waits for the latest response before completing the same job and turn. Submission does not separately acknowledge acceptance or model consumption.
 
-Qualification blocker: 1.5.6 can return `end_turn` before a background command finishes, unlike 1.4.4. The migration is pending the director's decision; details are in the plugin's `scripts/agy-acp/README.md`.
+An unfinished execute tool prevents steer; choose queue or interrupt. If the CLI returns `end_turn` before finite commands finish, the job stays running, reads their statuses through `session/load`, and automatically prompts the agent to finish the original task once they complete. Repeated waits share 30 minutes; timeout reports the remaining commands. Native `IsDaemon: true` commands are excluded. This recovery is agy-only; DSH retains the original prompt boundary.
 
 **ACP steering extensions.** A server advertises these with `_meta.steering.supported: true` at the initialize response's top level or under `agentCapabilities`. The plugin sends `_session/steering` with the current session, prompt and `_meta.steering.idleBehavior: "promptRequired"`. `injected` confirms insertion, not model consumption; `promptRequired` consumes nothing and asks the client to deliver a normal prompt later. A null or unrecognized outcome does not establish insertion. The DSH community plugin includes this extension; other servers need their corresponding extension.
 
