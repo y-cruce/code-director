@@ -153,7 +153,7 @@ NAME: worker answer subcommand
 
 ### Executors
 
-`EXECUTOR` selects a new task's agent; omitted uses `$CODEX_DIRECTOR_EXECUTOR`, else Codex. Select `executor: "codex"` explicitly when needed. Reviews ignore that default and use Codex. Both `continue` and `fork` restore their thread's original executor, ACP command and arguments; a conflicting explicit executor is rejected. `fork` works on `codex`, `qoder`, and `dsh` with `acp-fork`; `agy` (`agy acp` 1.5.6) and PATH `dsh` (`acp`) do not advertise `session/fork` and fail with `UNSUPPORTED_CAPABILITY`. The skill routes frontend work to agy; frontend reviews use read-only `investigate`.
+`EXECUTOR` selects a new task's agent; omitted uses `$CODEX_DIRECTOR_EXECUTOR`, else Codex. Select `executor: "codex"` explicitly when needed. Reviews ignore that default and use Codex. Both `continue` and `fork` restore their thread's original executor, ACP command and arguments; a conflicting explicit executor is rejected. `fork` works on `codex`, `qoder`, and `dsh` with `acp-fork`; `agy` (`agy acp` 1.5.6) and PATH `dsh` (`acp`) do not advertise `session/fork` and fail with `UNSUPPORTED_CAPABILITY`. The skill makes agy the first-choice executor: its default model, gemini-4-carbon, is strong at complex coding tasks and frontend work, so investigations and implementations go to it first; frontend reviews use read-only `investigate`.
 
 Older companions without `executor-preset` require the original executor explicitly on `continue`; update and reload the plugin for automatic restoration. ACP command instructions are shown only when the selected companion supports them; otherwise dsh puts questions in its final reply.
 

@@ -1,6 +1,6 @@
 ---
 name: code-director
-description: A way of working where another coding agent executes and Claude only directs. Load this skill for code investigation, debugging, implementation, frontend design, review or a second opinion, and whenever the user says "ask codex", "let codex look", "use codex", or names another executor such as qoder, dsh or Antigravity (agy). All frontend work defaults to agy. Follow the process to dispatch the work; Claude only writes the brief, judges the result, and makes the calls.
+description: A way of working where another coding agent executes and Claude only directs. Load this skill for code investigation, debugging, implementation, frontend design, review or a second opinion, and whenever the user says "ask codex", "let codex look", "use codex", or names another executor such as qoder, dsh or Antigravity (agy). agy (default model gemini-4-carbon) is the first-choice executor for investigation, debugging and implementation, frontend included. Follow the process to dispatch the work; Claude only writes the brief, judges the result, and makes the calls.
 ---
 
 # Code director mode
@@ -44,7 +44,7 @@ Fill `mode`, `name`, `cwd` and `brief` every time, and other fields only when a 
 | Standard code review | `review` | Prefer `base`; see "Reviews" |
 | Challenge the approach and assumptions | `adversarial-review` | The brief is the focus text; prefer `base` |
 
-**Frontend routing.** Antigravity (`agy`) specializes in frontend work. Send all frontend design, pages, components, styling, interactions, debugging and verification to it by default, using `executor: "agy"` (equivalent to `"antigravity"`), including small tasks. For frontend reviews, use `mode: "investigate"` with a read-only review brief, because ACP has no native review mode. Split mixed frontend/backend work so agy owns the frontend part. Continue an existing agy session for follow-ups (`agy` does not support `fork`). A later explicit user choice of executor takes precedence.
+**Executor routing.** Antigravity (`agy`) is the first-choice executor. Its default model, gemini-4-carbon with high thinking, is strong at complex coding tasks and frontend work. Send investigations, debugging and implementation to it with `executor: "agy"` (equivalent to `"antigravity"`), backend and frontend alike; one agy task can own a mixed frontend/backend change. All frontend design, pages, components, styling, interactions, debugging and verification go to agy, including small tasks. Exceptions: `review` and `adversarial-review` stay on Codex because ACP has no native review mode, so frontend reviews go to agy as `mode: "investigate"` with a read-only review brief; an investigation you expect to branch runs on a fork-capable executor (see "Thread continuity"). Continue an existing agy session for follow-ups (`agy` does not support `fork`). A later explicit user choice of executor takes precedence.
 
 **Executor, model and effort.** Omitting `executor` uses `$CODEX_DIRECTOR_EXECUTOR`, else Codex. When Codex is required, explicitly set `executor: "codex"`. Reviews use Codex regardless of that default. Both `continue` and `fork` restore the thread's original executor, command and arguments; omit `executor`, or supply the same one. A mismatch is rejected. Permissions, mode, model and effort are inherited by default and can be explicitly overridden; ACP `fork` re-applies mode, model and effort on the new session after forking. Leave model and effort unset to keep the executor's configuration. Set Codex `effort` only to escalate an unclear or non-deterministic problem; continue the same thread. ACP uses `executor_effort`; a new agy session defaults to Carbon high or Opus medium in the driver, and continuation keeps its existing effort unless explicitly changed.
 
@@ -203,6 +203,6 @@ When early information starts getting lost, run `/codex:transfer` to turn the se
 
 ## Reference files
 
-- `references/executors.md`: Antigravity for frontend work; qoder, dsh and other ACP agents when the user names one.
+- `references/executors.md`: Antigravity, the first-choice executor; qoder, dsh and other ACP agents when the user names one.
 - `references/worktrees.md`: creating and removing worktrees for parallel writers.
 - `references/cli.md`: the Bash forms when the `mcp__codex__*` tools are missing, the event stream for headless sessions, and cleaning stale rows in the tasks pane.
