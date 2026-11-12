@@ -6,7 +6,7 @@ Use Antigravity (`agy`) for frontend work unless the user chooses another execut
 |---|---|---|
 | `codex` | Codex through the plugin's app-server | — |
 | `qoder` | qodercli over ACP; found on PATH, then `~/.qoder/entry/qoder`, or `CODEX_DIRECTOR_QODER_COMMAND` | `executor_mode` (a Qoder session mode, e.g. `yolo`) |
-| `dsh` | DeepSeek Harness over ACP (`dsh --profile acp`); executable from `executor_command`, `$CODEX_DIRECTOR_DSH_COMMAND`, then PATH | `executor_args` (override the launch arguments), `executor_permissions` (`allow-once` or `ask`) |
+| `dsh` | Isolated DeepSeek Harness with `@8kugames/dsh-zed-acp`; executable from `executor_command`, `$CODEX_DIRECTOR_DSH_COMMAND`, then `~/.local/share/dsh-fork/dsh`; arguments default to `["--profile","acp-fork"]` | `executor_args`, `executor_mode` (`default` or `plan`), `executor_permissions` (`allow-once` or `ask`) |
 | `antigravity` (alias `agy`) | Google's official `agy_acp_server.par` / `agy_acp_server` over ACP; executable from `executor_command`, `$CODEX_DIRECTOR_ANTIGRAVITY_COMMAND`, then PATH or `~/.local/bin/agy_acp_server.par` | `executor_args`, `executor_mode`, `executor_permissions` (`allow-once` or `ask`) |
 | `acp` | Any other agent speaking the Agent Client Protocol on stdio | `executor_command` (or `$CODEX_COMPANION_ACP_COMMAND`; one of them is required), `executor_args` (an array of strings), `executor_mode` |
 
@@ -16,11 +16,30 @@ For running corrections, use the same default `delivery: "steer"` as Codex when 
 
 For mid-turn messages, Qoder advertises its private `agentCapabilities._meta.qoder.promptQueueing` capability. A supporting plugin sends another `session/prompt` to the same session while the current prompt is running; Qoder can consume it at a loop boundary. Use default `delivery: "steer"` only when the plugin reports `midTurnSteer: true`. `queue` is for an intended next turn. If an older plugin lacks steering, choose queue or interrupt by the correction's intent. Submission does not prove model consumption. Qoder does not implement the `_session/steering` extension.
 
-**DSH.** Leave `model` out to keep its configured model; an explicit value must be an advertised ACP model id. DSH has no session modes, so do not send `executor_mode`. Its default `executor_permissions: allow-once` selects only the offered one-shot allow option; `ask` forwards permission choices to you. Continue with `continue`, the returned thread, and the same command and profile. When a round and its queue finish, the worker process closes; the next dispatch restores the conversation through `session/resume`, and the plugin replays its own saved events because DSH resume does not.
+**DSH.** The default launcher is `~/.local/share/dsh-fork/dsh --profile acp-fork`. It sets `DSH_HOME=~/.local/share/dsh-fork/home` and runs dsh `0.2.2-rc.1` from `~/.local/share/dsh-fork/runtime`, with Cordis `4.1.0` and community plugin `@8kugames/dsh-zed-acp` `0.3.10`. Leave `model` out to keep the profile's configured model; an explicit value must be an advertised ACP model id. Modes are `default` and `plan`; omit `executor_mode` for the profile default. The default `executor_permissions: allow-once` selects only an offered one-shot allow option; `ask` forwards permission choices to you. Continue with the returned thread and omit launch overrides: its recorded command and arguments are restored, including the old launcher for existing DSH threads. After the worker closes, continuation uses `session/resume` and the plugin replays its saved events.
 
-The original DSH ACP adapter allows only one in-flight prompt per session and rejects a second with `a prompt is already in flight for this session`. Its core/API has steer; the local `dsh-plugins/acp-steering` extension exposes it separately through `_session/steering`, while ordinary prompts retain the existing guard. Use steer when that extension advertises support and the plugin reports `midTurnSteer: true`; otherwise use queue or interrupt.
+The community plugin implements `_session/steering` and advertises it under `agentCapabilities._meta.steering`. Steering appends to the active turn; the original `session/prompt` response still ends that turn. It also provides `session/load`, whole-session `session/fork` and inclusive forking at an assistant reply. The companion has no task-fork entry point yet. New tasks use this adapter's built-in steering; the old global `dsh-plugins/acp-steering` patch is needed only for threads using the original ACP adapter.
 
-DSH has no native question tool in this profile. Use `node "$CODEX_ACP_COMPANION_PATH" ask-director --question "Question" --options '["First","Second"]'`. It uses the same pending-question, answer and ten-minute timeout path as ACP native questions and prints the answer, including free text, to stdout. With dsh bash, use `timeoutMs:600000`; the default is 120000 ms, capped at 600000 ms. A composition with jobs promotes a still-running foreground command on timeout; collect it with `job_output`, not a new question. Without jobs the shell may kill it at that limit, slightly before the companion's deadline; report the shell outcome and check status.
+For director questions use `node "$CODEX_ACP_COMPANION_PATH" ask-director --question "Question" --options '["First","Second"]'`. It uses the same pending-question, answer and ten-minute timeout path as ACP native questions and prints the answer, including free text, to stdout. With dsh bash, use `timeoutMs:600000`; the default is 120000 ms, capped at 600000 ms. A composition with jobs promotes a still-running foreground command on timeout; collect it with `job_output`, not a new question. Without jobs the shell may kill it at that limit, slightly before the companion's deadline; report the shell outcome and check status.
+
+Install the pinned runtime outside `~/.dsh`, then install the plugin into its own home:
+
+```sh
+npm install --prefix "$HOME/.local/share/dsh-fork/runtime" --save-exact @deepseek-ai/dsh@0.2.2-rc.1
+node "$HOME/.local/share/dsh-fork/runtime/node_modules/@deepseek-ai/dsh-subprocess-local/scripts/ensure-spawn-helper.mjs"
+DSH_HOME="$HOME/.local/share/dsh-fork/home" "$HOME/.local/share/dsh-fork/runtime/node_modules/.bin/dsh" plugin --profile acp-fork add @8kugames/dsh-zed-acp@0.3.10
+```
+
+Create the executable `~/.local/share/dsh-fork/dsh` with:
+
+```sh
+#!/bin/sh
+DSH_FORK_ROOT=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
+export DSH_HOME="$DSH_FORK_ROOT/home"
+exec node "$DSH_FORK_ROOT/runtime/node_modules/@deepseek-ai/dsh/lib/bin.js" "$@"
+```
+
+Keep credentials and provider/model configuration in this new home. Copy credentials privately if reusing the existing account; copy only the provider and default-model rows needed by the new profile. Existing profile patches can contain installers that rewrite the global adapter. The new runtime owns only its new session store. To roll back a new dispatch, specify the original `dsh` as `executor_command` and `["--profile","acp"]` as `executor_args`; continue each existing thread with its recorded launcher. Both homes and runtimes must remain available while their threads are in use.
 
 **Antigravity.** It specializes in frontend design and implementation. Install Google's binary from the [ACP registry](https://github.com/agentclientprotocol/registry/blob/main/antigravity-acp/agent.json), keeping `localharness_external` beside it. The server starts with no arguments. Complete its Google authentication before dispatching; it stores settings under `~/.gemini/antigravity-acp/`, separately from `agy`. Leave `executor_mode` out for the server default. The default permission policy is `allow-once`. Continue with the returned session id and the same executable.
 
@@ -34,11 +53,11 @@ agy native `interaction_*` questions are carried as permission requests but are 
 
 Install the shared `codex-executor` skill under `~/.gemini/antigravity-cli/skills/codex-executor`; both the CLI and official ACP server read that user skill directory. Link the whole skill directory so its `scripts/context.sh` remains available. Dispatched tasks also receive the skill's absolute source path in the director note.
 
-**ACP steering extensions.** A server advertises these at the initialize response's top-level `_meta.steering.supported: true`. The plugin sends `_session/steering` with the current session, prompt and `_meta.steering.idleBehavior: "promptRequired"`. `injected` confirms insertion, not model consumption; `promptRequired` consumes nothing and asks the client to deliver a normal prompt later. A null or unrecognized outcome does not establish insertion. Unmodified DSH/Antigravity servers lack this advertisement; their local extensions must be installed before this route is available.
+**ACP steering extensions.** A server advertises these with `_meta.steering.supported: true` at the initialize response's top level or under `agentCapabilities`. The plugin sends `_session/steering` with the current session, prompt and `_meta.steering.idleBehavior: "promptRequired"`. `injected` confirms insertion, not model consumption; `promptRequired` consumes nothing and asks the client to deliver a normal prompt later. A null or unrecognized outcome does not establish insertion. The DSH community plugin includes this extension; other servers need their corresponding extension.
 
 The task-control endpoint is exposed in the ACP executor's environment and permits answer and approval calls; this relies on the executor not invoking those interfaces on its own.
 
-Plugin 1.4.103 includes Antigravity's proxy at `<plugin-root>/scripts/agy-acp/acp-proxy.mjs`; select that executable through `executor_command` or `CODEX_DIRECTOR_ANTIGRAVITY_COMMAND`. It requires the existing official ACP 1.4.4 runtime. Setup details are in the plugin's `scripts/agy-acp/README.md`. DSH's patch is maintained in [dsh-plugins/acp-steering](https://github.com/y-cruce/dsh-plugins/tree/main/acp-steering).
+Plugin 1.4.103 includes Antigravity's proxy at `<plugin-root>/scripts/agy-acp/acp-proxy.mjs`; select that executable through `executor_command` or `CODEX_DIRECTOR_ANTIGRAVITY_COMMAND`. It requires the existing official ACP 1.4.4 runtime. Setup details are in the plugin's `scripts/agy-acp/README.md`. DSH's community adapter is [@8kugames/dsh-zed-acp](https://github.com/8kugames/dsh-zed-acp).
 
 **What you lose off Codex:**
 

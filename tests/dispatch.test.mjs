@@ -30,7 +30,7 @@ else {
     CODEX_COMPANION_ACP_MODE: "yolo", CODEX_COMPANION_ACP_MODEL: "qoder-only-model" };
   delete env.CODEX_COMPANION_TRANSCRIPT_PATH;
   delete env.CODEX_COMPANION_SESSION_ID;
-  for (const [executor, command, launchArgs] of [["dsh", "/custom/dsh", ["--profile", "acp"]],
+  for (const [executor, command, launchArgs] of [["dsh", "/custom/dsh", ["--profile", "acp-fork"]],
     ["antigravity", "/custom/agy_acp_server.par", []], ["agy", "/custom/agy_acp_server.par", []]]) {
     for (const [mode, extra] of [["investigate", ""], ["continue", "THREAD: session-test\nEXECUTOR_PERMISSIONS: ask\nEXECUTOR_ARGS: [\"--debug\"]\nEXECUTOR_EFFORT: low\n"]]) {
       const result = spawnSync("bash", [SCRIPT, "dispatch"], { cwd, env, encoding: "utf8",
@@ -61,6 +61,19 @@ else {
       }
     }
   }
+  const isolatedDsh = path.join(cwd, ".local/share/dsh-fork/dsh");
+  fs.mkdirSync(path.dirname(isolatedDsh), { recursive: true });
+  fs.writeFileSync(isolatedDsh, "#!/bin/sh\n", { mode: 0o755 });
+  const isolated = spawnSync("bash", [SCRIPT, "dispatch"], {
+    cwd, env: { ...env, HOME: cwd, CODEX_DIRECTOR_DSH_COMMAND: "" }, encoding: "utf8",
+    input: `MODE: investigate\nNAME: isolated DSH\nCWD: ${cwd}\nEXECUTOR: dsh\nEXECUTOR_MODE: plan\n\nInspect.\n`
+  });
+  assert.equal(isolated.status, 0, isolated.stdout + isolated.stderr);
+  const isolatedArgs = JSON.parse(fs.readFileSync(recording, "utf8"));
+  const isolatedValue = flag => isolatedArgs[isolatedArgs.indexOf(flag) + 1];
+  assert.equal(isolatedValue("--executor-command"), isolatedDsh);
+  assert.deepEqual(JSON.parse(isolatedValue("--executor-args")), ["--profile", "acp-fork"]);
+  assert.equal(isolatedValue("--executor-mode"), "plan");
   const result = spawnSync("bash", [SCRIPT, "dispatch"], { cwd, env: { ...env, CODEX_DIRECTOR_EXECUTOR: "agy" }, encoding: "utf8",
     input: `MODE: continue\nNAME: original executor\nCWD: ${cwd}\nTHREAD: codex-thread\n\nContinue.\n` });
   assert.equal(result.status, 0, result.stdout + result.stderr);

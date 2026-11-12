@@ -88,7 +88,7 @@ EOF
   elif [ "$EXECUTOR" = dsh ]; then
     if grep -q 'ask-director' "$CC"; then
       cat <<'EOF'
-- This dsh profile has no native question tool. Run node "$CODEX_ACP_COMPANION_PATH" ask-director --question "question" --options '["First option","Second option"]' to wait for the director. Set bash timeoutMs:600000 (default 120000 ms, usual cap 600000 ms). If promoted to a background job, collect that same job with job_output. The answer is printed to stdout; cancellation or the 10-minute deadline exits nonzero. A shell without job promotion may kill it first: report that and check the pending question, never infer an answer or retry it.
+- For a director question, run node "$CODEX_ACP_COMPANION_PATH" ask-director --question "question" --options '["First option","Second option"]' to wait for the director. Set bash timeoutMs:600000 (default 120000 ms, usual cap 600000 ms). If promoted to a background job, collect that same job with job_output. The answer is printed to stdout; cancellation or the 10-minute deadline exits nonzero. A shell without job promotion may kill it first: report that and check the pending question, never infer an answer or retry it.
 EOF
     else
       cat <<'EOF'
@@ -322,17 +322,16 @@ do_launch() {
         fi ;;
       dsh)
         EXECUTOR_COMMAND="${EXECUTOR_COMMAND:-${CODEX_DIRECTOR_DSH_COMMAND:-}}"
-        [ -z "$EXECUTOR_COMMAND" ] && EXECUTOR_COMMAND=$(command -v dsh || true)
         if [ -z "$EXECUTOR_COMMAND" ]; then
-          echo "CODEX_FAILED: dsh not found; put it on PATH or set CODEX_DIRECTOR_DSH_COMMAND"; exit 1
+          EXECUTOR_COMMAND="$HOME/.local/share/dsh-fork/dsh"
+          if [ ! -x "$EXECUTOR_COMMAND" ]; then
+            echo "CODEX_FAILED: isolated dsh launcher not found at $EXECUTOR_COMMAND; install it or set CODEX_DIRECTOR_DSH_COMMAND"; exit 1
+          fi
         fi
-        if [ -n "$EXECUTOR_MODE" ]; then
-          echo "CODEX_FAILED: dsh ACP has no session modes; use EXECUTOR_PERMISSIONS: ask or allow-once"; exit 1
-        fi
-        # Generic ACP defaults may name Qoder modes/models. DSH has no modes
-        # and keeps its own configured model unless the brief names MODEL.
+        # Generic ACP defaults may name Qoder modes/models. Keep the DSH
+        # profile's mode and model unless the brief selects one explicitly.
         unset CODEX_COMPANION_ACP_MODE CODEX_COMPANION_ACP_MODEL
-        CMD+=(--executor acp --executor-command "$EXECUTOR_COMMAND" --executor-args "${EXECUTOR_ARGS:-[\"--profile\",\"acp\"]}")
+        CMD+=(--executor acp --executor-command "$EXECUTOR_COMMAND" --executor-args "${EXECUTOR_ARGS:-[\"--profile\",\"acp-fork\"]}")
         # DSH exposes one-shot permissions, not Qoder's yolo session mode.
         EXECUTOR_PERMISSIONS="${EXECUTOR_PERMISSIONS:-allow-once}" ;;
       antigravity|agy)
