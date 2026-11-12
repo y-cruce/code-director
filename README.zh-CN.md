@@ -160,11 +160,11 @@ NAME: worker 回答子命令
 |---|---|---|
 | `codex`（环境未配置时的默认） | 走插件 app-server 的 Codex | — |
 | `qoder` | 走 ACP 的 qodercli；二进制按 PATH、`~/.qoder/entry/qoder`、`CODEX_DIRECTOR_QODER_COMMAND` 的顺序找 | `EXECUTOR_MODE`（Qoder 的会话模式，例如 `yolo`） |
-| `dsh` | 走 ACP 的 DeepSeek Harness；依次查找 `EXECUTOR_COMMAND`、`CODEX_DIRECTOR_DSH_COMMAND`、可执行的 `~/.local/share/dsh-fork/dsh`、PATH 上的 `dsh` | `EXECUTOR_ARGS`、`EXECUTOR_MODE`（社区 profile 的 `default`/`plan`）、`EXECUTOR_PERMISSIONS`（默认 `allow-once`，可改为 `ask`） |
+| `dsh` | 走 ACP 的 DeepSeek Harness；依次查找 `EXECUTOR_COMMAND`、`CODEX_DIRECTOR_DSH_COMMAND`、可执行的 `~/.local/share/dsh-fork/dsh`、PATH 上的 `dsh`；默认参数可用 `CODEX_DIRECTOR_DSH_ARGS` 指定 | `EXECUTOR_ARGS`、`EXECUTOR_MODE`（社区 profile 的 `default`/`plan`）、`EXECUTOR_PERMISSIONS`（默认 `allow-once`，可改为 `ask`） |
 | `antigravity`（别名 `agy`） | CLI 自带的 `agy acp`；优先 `~/.local/bin/agy`，其次 PATH；用 `EXECUTOR_COMMAND` 或 `CODEX_DIRECTOR_ANTIGRAVITY_COMMAND` 覆盖 | `EXECUTOR_ARGS`、`EXECUTOR_MODE`、`EXECUTOR_PERMISSIONS`（默认 `allow-once`，可改为 `ask`） |
 | `acp` | 任何在 stdio 上说 Agent Client Protocol 的 agent | `EXECUTOR_COMMAND`（必填）、`EXECUTOR_ARGS`（JSON 数组）、`EXECUTOR_MODE` |
 
-DSH 依次查找显式 `EXECUTOR_COMMAND`、`CODEX_DIRECTOR_DSH_COMMAND`、可执行的 `~/.local/share/dsh-fork/dsh`、PATH 上的 `dsh`。独立安装是可选的，提供 fork 能力，默认参数为 `["--profile","acp-fork"]`；没装时使用 PATH 上的 dsh，默认参数为 `["--profile","acp"]`，并拒绝 `EXECUTOR_MODE`，因为旧 profile 没有会话模式。`EXECUTOR_ARGS` 优先于所选默认参数。可选安装使用 dsh `0.2.2-rc.1`、Cordis `4.1.0` 和社区插件 `@8kugames/dsh-zed-acp` `0.3.10`，位于 `~/.local/share/dsh-fork/`，启动器设置 `DSH_HOME` 为其中的 `home/`，使用 `runtime/` 内的运行时。
+DSH 依次查找显式 `EXECUTOR_COMMAND`、`CODEX_DIRECTOR_DSH_COMMAND`、可执行的 `~/.local/share/dsh-fork/dsh`、PATH 上的 `dsh`。默认参数优先取 `CODEX_DIRECTOR_DSH_ARGS`（JSON 数组）；未设置时，可选的独立安装默认为 `["--profile","acp-fork"]`，PATH 或自定义命令默认为 `["--profile","acp"]`（PATH 旧 profile 没有会话模式，会拒绝 `EXECUTOR_MODE`）。`EXECUTOR_ARGS` 优先于所有默认参数。可选安装使用 dsh `0.2.2-rc.1`、Cordis `4.1.0` 和社区插件 `@8kugames/dsh-zed-acp` `0.3.10`，位于 `~/.local/share/dsh-fork/`，启动器设置 `DSH_HOME` 为其中的 `home/`，使用 `runtime/` 内的运行时。
 
 派单写 `EXECUTOR: dsh`；继续对话写 `MODE: continue`、`THREAD: <返回的 session id>`，自动恢复该线程记录的命令和 profile，已有 DSH 线程继续沿用旧启动配置。一轮结束后进程可退出，下次通过 `session/resume` 恢复上下文，插件保留事件历史。可选的社区适配器内置 steering、`default`/`plan` 模式、load 和 fork，companion 尚未提供任务分叉入口。steering 仍由原 prompt 响应结束回合；`message --queue` 用于下一轮，`--interrupt` 取消当前轮后执行新指令。默认只选择 `allow_once` 权限；`EXECUTOR_PERMISSIONS: ask` 把选项交给 Director。省略 `MODEL` 时保留 DSH 配置的模型。设 `CODEX_DIRECTOR_EXECUTOR=dsh` 可将它设为默认执行器。[安装与回退说明](skills/code-director/references/executors.md) 中两套 home 的会话分别管理；回退新派单时，指定原 `dsh` 程序和 `EXECUTOR_ARGS: ["--profile","acp"]`。
 

@@ -30,6 +30,7 @@ else {
     CODEX_COMPANION_ACP_MODE: "yolo", CODEX_COMPANION_ACP_MODEL: "qoder-only-model" };
   delete env.CODEX_COMPANION_TRANSCRIPT_PATH;
   delete env.CODEX_COMPANION_SESSION_ID;
+  delete env.CODEX_DIRECTOR_DSH_ARGS;
   const localAgy = path.join(cwd, ".local/bin/agy");
   fs.mkdirSync(path.dirname(localAgy), { recursive: true });
   fs.writeFileSync(localAgy, "#!/bin/sh\n", { mode: 0o755 });
@@ -71,7 +72,8 @@ else {
   for (const row of [
     { name: "isolated", installed: true, mode: "plan", expected: ["--profile", "acp-fork"] },
     { name: "PATH", expected: ["--profile", "acp"] },
-    { name: "PATH override", args: ["--custom"], expected: ["--custom"] },
+    { name: "env default args", command: "/custom/dsh", envArgs: ["--profile", "acp-fork"], mode: "plan", expected: ["--profile", "acp-fork"] },
+    { name: "PATH override", envArgs: ["--profile", "acp-fork"], args: ["--custom"], expected: ["--custom"] },
     { name: "PATH mode", mode: "plan", refused: true }
   ]) {
     const home = path.join(cwd, row.name);
@@ -82,7 +84,8 @@ else {
       fs.writeFileSync(isolatedDsh, "#!/bin/sh\n", { mode: 0o755 });
     }
     const selected = spawnSync("bash", [SCRIPT, "dispatch"], {
-      cwd, env: { ...env, HOME: home, PATH: `${path.dirname(pathDsh)}${path.delimiter}${env.PATH}`, CODEX_DIRECTOR_DSH_COMMAND: "" }, encoding: "utf8",
+      cwd, env: { ...env, HOME: home, PATH: `${path.dirname(pathDsh)}${path.delimiter}${env.PATH}`,
+        CODEX_DIRECTOR_DSH_COMMAND: row.command ?? "", CODEX_DIRECTOR_DSH_ARGS: row.envArgs ? JSON.stringify(row.envArgs) : "" }, encoding: "utf8",
       input: `MODE: investigate\nNAME: ${row.name} DSH\nCWD: ${cwd}\nEXECUTOR: dsh\n${row.mode ? `EXECUTOR_MODE: ${row.mode}\n` : ""}${row.args ? `EXECUTOR_ARGS: ${JSON.stringify(row.args)}\n` : ""}\nInspect.\n`
     });
     if (row.refused) {
@@ -93,7 +96,7 @@ else {
     assert.equal(selected.status, 0, selected.stdout + selected.stderr);
     const args = JSON.parse(fs.readFileSync(recording, "utf8"));
     const value = flag => args[args.indexOf(flag) + 1];
-    const command = row.installed ? isolatedDsh : pathDsh;
+    const command = row.command ?? (row.installed ? isolatedDsh : pathDsh);
     assert.equal(value("--executor-command"), command);
     assert.deepEqual(JSON.parse(value("--executor-args")), row.expected);
     if (row.mode) assert.equal(value("--executor-mode"), row.mode);
@@ -122,6 +125,7 @@ else { fs.writeFileSync(process.env.RECORDING, JSON.stringify(process.argv.slice
     CLAUDE_CONFIG_DIR: cwd, CODEX_DIRECTOR_EXECUTOR: "agy", CODEX_DIRECTOR_DSH_COMMAND: "/custom/dsh" };
   delete env.CODEX_COMPANION_TRANSCRIPT_PATH;
   delete env.CODEX_COMPANION_SESSION_ID;
+  delete env.CODEX_DIRECTOR_DSH_ARGS;
   const dispatch = headers => spawnSync("bash", [SCRIPT, "dispatch"], { cwd, env, encoding: "utf8",
     input: `NAME: legacy capability check\nCWD: ${cwd}\n${headers}\nProceed.\n` });
   for (const executor of ["dsh", "acp"]) {

@@ -337,8 +337,10 @@ do_launch() {
           fi
         fi
         # Only the isolated fork-capable launcher has the acp-fork profile; any
-        # other launcher (PATH dsh or a CODEX_DIRECTOR_DSH_COMMAND wrapper) keeps acp.
+        # other launcher (PATH dsh or a CODEX_DIRECTOR_DSH_COMMAND wrapper) keeps acp
+        # unless CODEX_DIRECTOR_DSH_ARGS overrides the default arguments.
         [ "$EXECUTOR_COMMAND" = "$DSH_FORK_LAUNCHER" ] && DSH_DEFAULT_ARGS='["--profile","acp-fork"]'
+        DSH_DEFAULT_ARGS="${CODEX_DIRECTOR_DSH_ARGS:-$DSH_DEFAULT_ARGS}"
         # Generic ACP defaults may name Qoder modes/models. Keep the DSH
         # profile's mode and model unless the brief selects one explicitly.
         unset CODEX_COMPANION_ACP_MODE CODEX_COMPANION_ACP_MODEL
