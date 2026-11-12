@@ -49,7 +49,7 @@ Fill `mode`, `name`, `cwd` and `brief` every time, and other fields only when a 
 
 For qoder, dsh, Antigravity or another ACP agent, read `references/executors.md` first for its available controls. Without an executable override, DSH uses the optional executable `~/.local/share/dsh-fork/dsh --profile acp-fork` when installed, otherwise PATH's `dsh --profile acp`; existing threads retain their recorded launch configuration. Read-only intent belongs in the brief: default full access permits writes even without `write: true`. Codex's explicit sandbox settings are enforced by Codex; ACP uses the agent's own modes and permissions, not those sandbox flags.
 
-**Antigravity / agy.** `antigravity` is the executor's canonical name; `agy` is an equivalent alias. Accept either from the user and in the `executor` field. If the installed dispatch tool's schema offers neither value, use its existing `executor: "acp"` with `executor_command` set to the absolute path of `agy_acp_server.par` / `agy_acp_server`, `executor_args: []` and `executor_permissions: "allow-once"`. The Bash route accepts both `EXECUTOR: antigravity` and `EXECUTOR: agy` directly. Both launch the same official ACP server and can continue the same session. See `references/executors.md` for setup and session continuation.
+**Antigravity / agy.** `antigravity` is the executor's canonical name; `agy` is an equivalent alias. Accept either from the user and in the `executor` field. Both launch the installed CLI's `agy acp`, preferring `~/.local/bin/agy` to PATH terminal wrappers, and reuse the CLI login and MCP configuration. If the installed dispatch tool's schema offers neither value, use `executor: "acp"` with the absolute CLI path as `executor_command`, `executor_args: ["acp"]` and `executor_permissions: "allow-once"`. The Bash route accepts either preset directly. Continue restores the recorded command and arguments. See `references/executors.md` for setup and session continuation.
 
 **What executors are told.** For `investigate` and `implement`, dispatch.sh prepends the director note and executor skill entry. Codex uses `request_user_input` and `notify_director`; ACP sends notes with `node "$CODEX_ACP_COMPANION_PATH" notify-director "message"`. agy and Qoder use native questions; dsh uses the blocking `ask-director` command from the skill. The "最终回报要求" footer follows every task and continue brief. Leave that boilerplate out of your brief. Tasks never talk to each other: relay relevant findings and list overlapping tasks in `siblings`.
 
@@ -91,7 +91,7 @@ Events wake you by themselves. After 15 minutes without events or progress, chec
 
 ### Steering a running job
 
-Corrections to running work default to steering in the same job, thread and turn. This covers Codex, Qoder, and DSH/agy with their steering extensions when the plugin reports `midTurnSteer: true`. Do not choose queue just because the executor uses ACP.
+Corrections to running work default to steering in the same job, thread and turn. This covers Codex, Qoder, agy's native concurrent prompt, and DSH with its steering extension when the plugin reports `midTurnSteer: true`. Do not choose queue just because the executor uses ACP.
 
 | Intent | Call |
 |---|---|

@@ -346,14 +346,15 @@ do_launch() {
       antigravity|agy)
         EXECUTOR_COMMAND="${EXECUTOR_COMMAND:-${CODEX_DIRECTOR_ANTIGRAVITY_COMMAND:-}}"
         if [ -z "$EXECUTOR_COMMAND" ]; then
-          EXECUTOR_COMMAND=$(command -v agy_acp_server.par || command -v agy_acp_server || true)
-          [ -z "$EXECUTOR_COMMAND" ] && [ -x "$HOME/.local/bin/agy_acp_server.par" ] && EXECUTOR_COMMAND="$HOME/.local/bin/agy_acp_server.par"
+          # Prefer the CLI binary over terminal wrappers that install hooks.
+          if [ -x "$HOME/.local/bin/agy" ]; then EXECUTOR_COMMAND="$HOME/.local/bin/agy"
+          else EXECUTOR_COMMAND=$(command -v agy || true); fi
         fi
         if [ -z "$EXECUTOR_COMMAND" ]; then
-          echo "CODEX_FAILED: official agy_acp_server not found; put it on PATH or set CODEX_DIRECTOR_ANTIGRAVITY_COMMAND"; exit 1
+          echo "CODEX_FAILED: agy not found; install agy with the acp subcommand or set CODEX_DIRECTOR_ANTIGRAVITY_COMMAND"; exit 1
         fi
         unset CODEX_COMPANION_ACP_MODE CODEX_COMPANION_ACP_MODEL
-        CMD+=(--executor acp --executor-command "$EXECUTOR_COMMAND" --executor-args "${EXECUTOR_ARGS:-[]}")
+        CMD+=(--executor acp --executor-command "$EXECUTOR_COMMAND" --executor-args "${EXECUTOR_ARGS:-[\"acp\"]}")
         EXECUTOR_PERMISSIONS="${EXECUTOR_PERMISSIONS:-allow-once}" ;;
       acp)
         EXECUTOR_COMMAND="${EXECUTOR_COMMAND:-${CODEX_COMPANION_ACP_COMMAND:-}}"

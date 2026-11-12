@@ -25,15 +25,19 @@ else {
 }
 `);
   const env = { ...process.env, CODEX_COMPANION: companion, CODEX_DIRECTOR_DSH_COMMAND: "/custom/dsh",
-    CODEX_DIRECTOR_ANTIGRAVITY_COMMAND: "/custom/agy_acp_server.par",
+    CODEX_DIRECTOR_ANTIGRAVITY_COMMAND: "/custom/agy",
     CLAUDE_CONFIG_DIR: cwd, RECORDING: recording, TMPDIR: cwd,
     CODEX_COMPANION_ACP_MODE: "yolo", CODEX_COMPANION_ACP_MODEL: "qoder-only-model" };
   delete env.CODEX_COMPANION_TRANSCRIPT_PATH;
   delete env.CODEX_COMPANION_SESSION_ID;
+  const localAgy = path.join(cwd, ".local/bin/agy");
+  fs.mkdirSync(path.dirname(localAgy), { recursive: true });
+  fs.writeFileSync(localAgy, "#!/bin/sh\n", { mode: 0o755 });
   for (const [executor, command, launchArgs] of [["dsh", "/custom/dsh", ["--profile", "acp-fork"]],
-    ["antigravity", "/custom/agy_acp_server.par", []], ["agy", "/custom/agy_acp_server.par", []]]) {
+    ["antigravity", "/custom/agy", ["acp"]], ["agy", localAgy, ["acp"]]]) {
     for (const [mode, extra] of [["investigate", ""], ["continue", "THREAD: session-test\nEXECUTOR_PERMISSIONS: ask\nEXECUTOR_ARGS: [\"--debug\"]\nEXECUTOR_EFFORT: low\n"]]) {
-      const result = spawnSync("bash", [SCRIPT, "dispatch"], { cwd, env, encoding: "utf8",
+      const presetEnv = executor === "agy" ? { ...env, HOME: cwd, CODEX_DIRECTOR_ANTIGRAVITY_COMMAND: "" } : env;
+      const result = spawnSync("bash", [SCRIPT, "dispatch"], { cwd, env: presetEnv, encoding: "utf8",
         input: `MODE: ${mode}\nNAME: ACP conversation\nCWD: ${cwd}\nEXECUTOR: ${executor}\n${extra}\nContinue the work.\n` });
       assert.equal(result.status, 0, result.stdout + result.stderr);
       assert.match(result.stdout, /THREAD: session-test/);
