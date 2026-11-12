@@ -122,7 +122,7 @@ review 一下这个分支的改动
 
 Claude 会加载 code-director，写任务书，派出去，处理插件推送的任务事件，抽查，汇报。你也可以直接点名：「用 codex 查一下 X」。
 
-插件提供 `mcp__codex__tasks`，Claude 可以一次调用查找要继续的线程，或查看本会话正在运行的任务。它默认跨仓库列出本会话派出的线程，从新到旧显示名称、线程 ID（尚未获得时为 `pending`）、执行器、状态、最新 job 和仓库路径；排队的后续轮次合并到同一线程。可选 `query` 按名称筛选且忽略大小写，`cwd` 限定仓库，`limit` 设置条数（默认 20，范围 1–100），`all: true` 包含其他会话最近 3 天创建的任务并标出会话 ID，`days` 可用正整数扩大范围，末尾提示未显示的较早匹配数量。本会话的线程不设时间窗口。首次列表会一次性迁移旧任务，后续读取会话索引；闲置 7 天的索引会被清理，任务记录和状态目录保留。
+插件提供 `mcp__codex__tasks`，Claude 可以一次调用查找要继续或分叉的线程，或查看本会话正在运行的任务。它默认跨仓库列出本会话派出的线程，从新到旧显示名称、线程 ID（尚未获得时为 `pending`）、执行器、状态、最新 job 和仓库路径，从旧线程分叉出来的线程会在末尾带上 `forked from=<thread>`；排队的后续轮次合并到同一线程。可选 `query` 按名称筛选且忽略大小写，`cwd` 限定仓库，`limit` 设置条数（默认 20，范围 1–100），`all: true` 包含其他会话最近 3 天创建的任务并标出会话 ID，`days` 可用正整数扩大范围，末尾提示未显示的较早匹配数量。本会话的线程不设时间窗口。首次列表会一次性迁移旧任务，后续读取会话索引；闲置 7 天的索引会被清理，任务记录和状态目录保留。
 
 ### 任务书格式
 
@@ -147,12 +147,13 @@ NAME: worker 回答子命令
 | `investigate` | 读代码、追调用链、排查根因 | 不会 |
 | `implement` | 按任务书写实现 | 会 |
 | `continue` | 续接原执行器的线程 | 意图写在任务书；默认 full access 已允许写入 |
+| `fork` | 从闲置的源线程分叉出新独立线程（`THREAD:` 填源线程；回执返回新 `THREAD:` 和 `FORKED_FROM:`） | 意图写在任务书；默认 full access 已允许写入 |
 | `review` | 官方 review | 不会 |
 | `adversarial-review` | 挑刺式 review，正文写关注点 | 不会 |
 
 ### 执行器
 
-`EXECUTOR` 决定新任务的执行器；省略时取 `$CODEX_DIRECTOR_EXECUTOR`，没设才走 Codex。需要 Codex 时显式传 `executor: "codex"`。review 不受该默认值影响。`continue` 自动恢复原线程的执行器、ACP 命令和参数；显式指定不匹配的执行器会报错。技能仍把前端工作交给 agy；前端评审用只读 `investigate`。
+`EXECUTOR` 决定新任务的执行器；省略时取 `$CODEX_DIRECTOR_EXECUTOR`，没设才走 Codex。需要 Codex 时显式传 `executor: "codex"`。review 不受该默认值影响。`continue` 和 `fork` 都会自动恢复原线程的执行器、ACP 命令和参数；显式指定不匹配的执行器会报错。`fork` 支持 `codex`、`qoder` 和使用 `acp-fork` 的 `dsh`；`agy`（`agy acp` 1.5.6）与 PATH 上的 `dsh`（`acp`）未声明 `session/fork`，调用时会返回 `UNSUPPORTED_CAPABILITY`。技能仍把前端工作交给 agy；前端评审用只读 `investigate`。
 
 旧 companion 不支持 `executor-preset` 时，continue 必须显式写原执行器；升级并重载插件后才能自动恢复。ACP 命令只在所选 companion 支持时写入调度说明，否则 dsh 把需要回答的问题写进最终回复。
 
@@ -166,7 +167,7 @@ NAME: worker 回答子命令
 
 DSH 依次查找显式 `EXECUTOR_COMMAND`、`CODEX_DIRECTOR_DSH_COMMAND`、可执行的 `~/.local/share/dsh-fork/dsh`、PATH 上的 `dsh`。默认参数优先取 `CODEX_DIRECTOR_DSH_ARGS`（JSON 数组）；未设置时，可选的独立安装默认为 `["--profile","acp-fork"]`，PATH 或自定义命令默认为 `["--profile","acp"]`（PATH 旧 profile 没有会话模式，会拒绝 `EXECUTOR_MODE`）。`EXECUTOR_ARGS` 优先于所有默认参数。可选安装使用 dsh `0.2.2-rc.1`、Cordis `4.1.0` 和社区插件 `@8kugames/dsh-zed-acp` `0.3.10`，位于 `~/.local/share/dsh-fork/`，启动器设置 `DSH_HOME` 为其中的 `home/`，使用 `runtime/` 内的运行时。
 
-派单写 `EXECUTOR: dsh`；继续对话写 `MODE: continue`、`THREAD: <返回的 session id>`，自动恢复该线程记录的命令和 profile，已有 DSH 线程继续沿用旧启动配置。一轮结束后进程可退出，下次通过 `session/resume` 恢复上下文，插件保留事件历史。可选的社区适配器内置 steering、`default`/`plan` 模式、load 和 fork，companion 尚未提供任务分叉入口。steering 仍由原 prompt 响应结束回合；`message --queue` 用于下一轮，`--interrupt` 取消当前轮后执行新指令。默认只选择 `allow_once` 权限；`EXECUTOR_PERMISSIONS: ask` 把选项交给 Director。省略 `MODEL` 时保留 DSH 配置的模型。设 `CODEX_DIRECTOR_EXECUTOR=dsh` 可将它设为默认执行器。[安装与回退说明](skills/code-director/references/executors.md) 中两套 home 的会话分别管理；回退新派单时，指定原 `dsh` 程序和 `EXECUTOR_ARGS: ["--profile","acp"]`。
+派单写 `EXECUTOR: dsh`；继续对话写 `MODE: continue`、`THREAD: <返回的 session id>`（分叉出独立新线程写 `MODE: fork`、`THREAD: <源 session id>`），自动恢复该线程记录的命令和 profile，已有 DSH 线程继续沿用旧启动配置。一轮结束后进程可退出，下次通过 `session/resume` 恢复上下文，插件保留事件历史。可选的社区适配器内置 steering、`default`/`plan` 模式、load 和 `session/fork`（由 `MODE: fork` / `task --fork-thread <id>` 调用，分叉出新会话后重新应用 ACP 的 `mode`、`model` 和 `effort`）。steering 仍由原 prompt 响应结束回合；`message --queue` 用于下一轮，`--interrupt` 取消当前轮后执行新指令。默认只选择 `allow_once` 权限；`EXECUTOR_PERMISSIONS: ask` 把选项交给 Director。省略 `MODEL` 时保留 DSH 配置的模型。设 `CODEX_DIRECTOR_EXECUTOR=dsh` 可将它设为默认执行器。[安装与回退说明](skills/code-director/references/executors.md) 中两套 home 的会话分别管理；回退新派单时，指定原 `dsh` 程序和 `EXECUTOR_ARGS: ["--profile","acp"]`。
 
 Antigravity 使用 CLI 自带的 `agy acp`（已验证 1.5.6），复用 CLI 登录和 MCP 配置。优先使用 `~/.local/bin/agy`，避开终端包装脚本，其次查 PATH。派单写 `EXECUTOR: antigravity`，原生工具传 `executor: "antigravity"`。`EXECUTOR_ARGS` 默认 `["acp"]`，`EXECUTOR_MODE` 可指定 `default`、`accept-edits`、`auto`、`plan`。权限默认 `allow-once`，子进程继承 companion 的网络环境。
 
@@ -193,15 +194,16 @@ ln -s "$PWD/skills/codex-executor" ~/.gemini/antigravity-cli/skills/codex-execut
 
 必填头部：`NAME` 用几个词说明任务内容，超过 80 个字符会截断。名称显示在 dispatch/collect 输出的 `JOB:` 后；插件支持 `task --label` 时，也会显示在 status 和事件的任务 ID 旁，旧插件会输出提示并照常启动。review 命令同样传名称。
 
-可选头部：`EFFORT`（`medium` / `high` / `xhigh` / `max`；不写时，新任务用你 Codex 配置里的 `model_reasoning_effort`，`continue` 沿用该线程上次的级别）、`MODEL`（缺省用你 Codex 配置里的模型）、`BASE`（review 类的基准分支）、`THREAD`（`continue` 必须续上的 Codex 线程）、`SIBLINGS`（一行写明其他正在跑的 Codex 任务，会给 Codex 看）、`CWD`（在哪个仓库里跑）。
+可选头部：`EFFORT`（`medium` / `high` / `xhigh` / `max`；不写时，新任务用你 Codex 配置里的 `model_reasoning_effort`，`continue` 和 `fork` 沿用该线程上次的级别）、`MODEL`（缺省用你 Codex 配置里的模型）、`BASE`（review 类的基准分支）、`THREAD`（`continue` 要续接的线程，或 `fork` 要分叉的源线程）、`SIBLINGS`（一行写明其他正在跑的 Codex 任务，会给 Codex 看）、`CWD`（在哪个仓库里跑；`continue` 和 `fork` 必须填原线程的 `cwd`）。
 
 ### 线程连续性
 
-Codex 的上下文窗口很大，一个线程会记住它读过的所有代码。同一个问题的后续追问放在同一个线程里，又快又准，所以技能按**一个问题一个 Codex 线程**来管：
+Codex 的上下文窗口很大，一个线程会记住它读过的所有代码。同一个问题的后续追问放在同一个线程里，又快又准，所以技能按**一个问题一个 Codex 线程**来管，只在并行分支需要共享前置上下文时分叉：
 
-- 每次 task 类结果都带回一行 `THREAD: <id>`。
-- 同一个问题之后的所有派发（继续调查、追问、按调查结果实现、修 review 问题）都用 `MODE: continue`，头部带上这个 `THREAD:`。
-- 按下一步需要的上下文选线程。调查、验证或方案得出结论后，按结论实现或做端到端验证都续那个线程，从只读转为写代码、改动别的文件也一样。任务书要让新任务去读某个线程写的报告时，直接交给那个线程；该线程还在跑，就用 `message --queue` 把下一步排给它。
+- 每次 task 类结果都带回一行 `THREAD: <id>`（`MODE: fork` 返回新线程的 `THREAD: <id>`，并多带一行 `FORKED_FROM: <源线程 id>`）。
+- 同一个问题按顺序推进的后续派发（继续调查、追问、按调查结果实现、修 review 问题）都用 `MODE: continue`，头部带上这个 `THREAD:`。
+- 两个以上并行任务都要依赖同一次前置排查或上下文（比如一次调查后分到多个 worktree 并行写实现，或在不改动原线程的前提下试另一套做法），用 `MODE: fork` 搭配源线程的 `THREAD:`。源线程必须已跑完闲置，`CWD:` 仍填源线程目录，要在 worktree 里改文件就把 worktree 绝对路径写进任务书；分叉线程后续再追问时，对它返回的新 `THREAD:` 执行 `MODE: continue`。
+- 按下一步需要的上下文选线程。调查、验证或方案得出结论后，按结论实现或做端到端验证都续那个线程，从只读转为写代码、改动别的文件也一样。任务书要让新任务去读某个线程写的报告时，直接交给那个线程；该线程还在跑，就用 `message --queue` 把下一步排给它。评审和独立二审始终新建线程。
 - dispatch.sh 会核对请求的线程和插件即将续的线程是否一致，不一致就报 `THREAD_MISMATCH`，不会悄悄续到错的线程上。
 
 插件支持 `task --thread <id>` 时（见 [openai/codex-plugin-cc#719](https://github.com/openai/codex-plugin-cc/pull/719)），dispatch.sh 精确续到指定线程，多个问题可以随意交错。旧版插件只能续当前 Claude 会话在这个仓库里最近一个跑完的 task 线程，dispatch.sh 会退回候选校验，Claude 也会避免在两次 `continue` 之间往这个仓库派其他 task 类任务。

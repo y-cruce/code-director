@@ -14,13 +14,15 @@ test("ACP presets start and continue without inheriting Qoder modes or models", 
   const companion = path.join(cwd, "companion.mjs");
   const recording = path.join(cwd, "args.json");
   fs.writeFileSync(companion, `import fs from "node:fs";
-// Capability markers: executor-command executor-preset notify-director ask-director "executor-permissions" "label" "thread" danger-full-access case "message":
+// Capability markers: executor-command executor-preset notify-director ask-director "executor-permissions" "label" "thread" "fork-thread" danger-full-access case "message":
 if (process.argv[2] === "status") {
-  if (JSON.parse(fs.readFileSync(process.env.RECORDING, "utf8")).includes("--thread")) process.exit(1);
-  console.log(JSON.stringify({ job: { id: "task-test", status: "running", threadId: "session-test" } }));
+  const recorded = JSON.parse(fs.readFileSync(process.env.RECORDING, "utf8"));
+  if (recorded.includes("--thread")) process.exit(1);
+  if (recorded.includes("--fork-thread") && process.env.FORK_STATUS_UNAVAILABLE === "1") process.exit(1);
+  console.log(JSON.stringify({ job: { id: "task-test", status: "running", threadId: recorded.includes("--fork-thread") ? "forked-session-test" : "session-test" } }));
 }
 else {
-  if (!process.argv.includes("--thread") && (process.env.CODEX_COMPANION_ACP_MODE || process.env.CODEX_COMPANION_ACP_MODEL)) throw new Error("Preset inherited a generic ACP mode/model");
+  if (!process.argv.includes("--thread") && !process.argv.includes("--fork-thread") && (process.env.CODEX_COMPANION_ACP_MODE || process.env.CODEX_COMPANION_ACP_MODEL)) throw new Error("Preset inherited a generic ACP mode/model");
   fs.writeFileSync(process.env.RECORDING, JSON.stringify(process.argv.slice(2))); console.log(JSON.stringify({ jobId: "task-test" }));
 }
 `);
@@ -36,33 +38,51 @@ else {
   fs.writeFileSync(localAgy, "#!/bin/sh\n", { mode: 0o755 });
   for (const [executor, command, launchArgs] of [["dsh", "/custom/dsh", ["--profile", "acp"]],
     ["antigravity", "/custom/agy", ["acp"]], ["agy", localAgy, ["acp"]]]) {
-    for (const [mode, extra] of [["investigate", ""], ["continue", "THREAD: session-test\nEXECUTOR_PERMISSIONS: ask\nEXECUTOR_ARGS: [\"--debug\"]\nEXECUTOR_EFFORT: low\n"]]) {
+    for (const [mode, extra] of [
+      ["investigate", ""],
+      ["continue", "THREAD: session-test\nEXECUTOR_PERMISSIONS: ask\nEXECUTOR_ARGS: [\"--debug\"]\nEXECUTOR_EFFORT: low\n"],
+      ["fork", "THREAD: session-test\nEXECUTOR_PERMISSIONS: ask\nEXECUTOR_ARGS: [\"--debug\"]\nEXECUTOR_EFFORT: low\nWRITE: yes\n"]
+    ]) {
+      const resumed = mode === "continue" || mode === "fork";
       const presetEnv = executor === "agy" ? { ...env, HOME: cwd, CODEX_DIRECTOR_ANTIGRAVITY_COMMAND: "" } : env;
       const result = spawnSync("bash", [SCRIPT, "dispatch"], { cwd, env: presetEnv, encoding: "utf8",
         input: `MODE: ${mode}\nNAME: ACP conversation\nCWD: ${cwd}\nEXECUTOR: ${executor}\n${extra}\nContinue the work.\n` });
       assert.equal(result.status, 0, result.stdout + result.stderr);
-      assert.match(result.stdout, /THREAD: session-test/);
+      if (mode === "fork") {
+        assert.match(result.stdout, /THREAD: forked-session-test\nFORKED_FROM: session-test/);
+      } else {
+        assert.match(result.stdout, /THREAD: session-test/);
+        assert.doesNotMatch(result.stdout, /FORKED_FROM:/);
+      }
       const args = JSON.parse(fs.readFileSync(recording, "utf8"));
       const value = flag => args[args.indexOf(flag) + 1];
       assert.equal(value("--executor-preset"), executor);
-      if (mode === "continue") assert.equal(args.includes("--executor"), false, "transport comes from the thread");
+      if (resumed) assert.equal(args.includes("--executor"), false, "transport comes from the thread");
       else {
         assert.equal(value("--executor"), "acp");
         assert.equal(value("--executor-command"), command);
       }
-      assert.deepEqual(JSON.parse(value("--executor-args")), mode === "continue" ? ["--debug"] : launchArgs);
-      assert.equal(value("--executor-permissions"), mode === "continue" ? "ask" : "allow-once");
-      if (mode === "continue" || executor === "dsh") assert.equal(value("--executor-effort"), mode === "continue" ? "low" : "xhigh");
+      assert.deepEqual(JSON.parse(value("--executor-args")), resumed ? ["--debug"] : launchArgs);
+      assert.equal(value("--executor-permissions"), resumed ? "ask" : "allow-once");
+      if (resumed || executor === "dsh") assert.equal(value("--executor-effort"), resumed ? "low" : "xhigh");
       else assert.equal(args.includes("--executor-effort"), false, "agy new-session effort belongs to the driver");
       assert.equal(args.includes("--executor-mode"), false);
       assert.equal(args.includes("--executor-model"), false);
       if (mode === "continue") assert.equal(value("--thread"), "session-test");
+      if (mode === "fork") {
+        assert.equal(value("--fork-thread"), "session-test");
+        assert.equal(args.includes("--thread"), false);
+        assert.equal(args.includes("--write"), true);
+      }
       const prompt = fs.readFileSync(value("--prompt-file"), "utf8");
       assert.match(prompt, /---- 最终回报要求 ----/);
       assert.ok(prompt.indexOf("Continue the work.") < prompt.indexOf("最终回报要求"), "evidence requirement follows the brief");
       if (mode === "investigate") {
         assert.match(prompt, /notify-director/);
         if (executor === "dsh") assert.match(prompt, /ask-director/);
+      } else if (mode === "fork") {
+        assert.match(prompt, /^本线程从线程 session-test 分叉而来；原任务书及其中未完成的步骤不再约束本线程，一切以以下新任务书为准。/);
+        assert.doesNotMatch(prompt, /Who you are working with/);
       }
     }
   }
@@ -103,12 +123,24 @@ else {
     else assert.equal(args.includes("--executor-mode"), false);
     t.diagnostic(`DSH ${row.name}: ${command} ${JSON.stringify(row.expected)}`);
   }
-  const result = spawnSync("bash", [SCRIPT, "dispatch"], { cwd, env: { ...env, CODEX_DIRECTOR_EXECUTOR: "agy" }, encoding: "utf8",
-    input: `MODE: continue\nNAME: original executor\nCWD: ${cwd}\nTHREAD: codex-thread\n\nContinue.\n` });
-  assert.equal(result.status, 0, result.stdout + result.stderr);
-  const args = JSON.parse(fs.readFileSync(recording, "utf8"));
-  for (const flag of ["--executor", "--executor-preset", "--executor-command", "--executor-args", "--executor-effort"]) {
-    assert.equal(args.includes(flag), false, `continue must not supply a default ${flag}`);
+  for (const mode of ["continue", "fork"]) {
+    const result = spawnSync("bash", [SCRIPT, "dispatch"], {
+      cwd,
+      env: { ...env, CODEX_DIRECTOR_EXECUTOR: "agy", ...(mode === "fork" ? { FORK_STATUS_UNAVAILABLE: "1" } : {}) },
+      encoding: "utf8",
+      input: `MODE: ${mode}\nNAME: original executor\nCWD: ${cwd}\nTHREAD: codex-thread\n\nContinue.\n`
+    });
+    assert.equal(result.status, 0, result.stdout + result.stderr);
+    if (mode === "fork") {
+      // Source thread id must not populate $WORK/thread when status is unavailable.
+      assert.match(result.stdout, /THREAD: \nFORKED_FROM: codex-thread/);
+    } else {
+      assert.match(result.stdout, /THREAD: codex-thread/);
+    }
+    const args = JSON.parse(fs.readFileSync(recording, "utf8"));
+    for (const flag of ["--executor", "--executor-preset", "--executor-command", "--executor-args", "--executor-effort"]) {
+      assert.equal(args.includes(flag), false, `${mode} must not supply a default ${flag}`);
+    }
   }
 });
 
@@ -143,4 +175,12 @@ else { fs.writeFileSync(process.env.RECORDING, JSON.stringify(process.argv.slice
   assert.equal(explicit.status, 0, explicit.stdout + explicit.stderr);
   const args = JSON.parse(fs.readFileSync(recording, "utf8"));
   assert.equal(args[args.indexOf("--executor-command") + 1], "/custom/dsh");
+  for (const [headers, pattern] of [
+    ["MODE: fork\n", /THREAD_REQUIRED: fork requires the source thread id/],
+    ["MODE: fork\nTHREAD: original-thread\n", /FORK_UNSUPPORTED:.*--fork-thread/]
+  ]) {
+    const forkRejected = dispatch(headers);
+    assert.notEqual(forkRejected.status, 0);
+    assert.match(forkRejected.stdout, pattern);
+  }
 });

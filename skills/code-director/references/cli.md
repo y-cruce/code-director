@@ -13,7 +13,7 @@ Read this when the `mcp__codex__*` tools are missing from the session, in an SDK
 | `status` | `node "$CC" status <job-id> --cwd <repo> --brief` |
 | `cancel` | `node "$CC" cancel <job-id> --cwd <repo>` |
 
-The dispatch file has header lines, a blank line, then the brief. Each tool field is a header in upper case: `MODE`, `NAME`, `CWD` (defaults to your working directory), `THREAD`, `BASE`, `WRITE: yes`, `EFFORT`, `MODEL`, `SIBLINGS`, `SANDBOX`, `EXECUTOR`, `EXECUTOR_MODE`, `EXECUTOR_EFFORT`, `EXECUTOR_COMMAND`, `EXECUTOR_ARGS` (a JSON array), `EXECUTOR_PERMISSIONS`.
+The dispatch file has header lines, a blank line, then the brief. Each tool field is a header in upper case: `MODE` (`investigate`, `implement`, `continue`, `fork`, `review`, `adversarial-review`), `NAME`, `CWD` (defaults to your working directory; must match the thread's `cwd` on `continue` and `fork`), `THREAD` (required for `continue` and `fork`; names the source thread on `fork`), `BASE`, `WRITE: yes`, `EFFORT`, `MODEL`, `SIBLINGS`, `SANDBOX`, `EXECUTOR`, `EXECUTOR_MODE`, `EXECUTOR_EFFORT`, `EXECUTOR_COMMAND`, `EXECUTOR_ARGS` (a JSON array), `EXECUTOR_PERMISSIONS`. On `MODE: fork`, `dispatch` prints `THREAD: <new-thread>` and `FORKED_FROM: <source-thread>`; later rounds on the forked branch use `MODE: continue` with that new `THREAD:`.
 
 ```
 MODE: investigate

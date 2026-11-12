@@ -25,7 +25,7 @@
 #   dispatch.sh collect <WORK>         print the STATUS / JOB / NAME / THREAD lines
 #
 # Input file format: `KEY: value` header lines, a blank line, then the brief body.
-# Headers: NAME (required task name), MODE (investigate|implement|review|adversarial-review|continue), EFFORT, MODEL, BASE, WRITE, THREAD,
+# Headers: NAME (required task name), MODE (investigate|implement|review|adversarial-review|continue|fork), EFFORT, MODEL, BASE, WRITE, THREAD,
 # SIBLINGS, CWD, SANDBOX (full = no sandbox, the default for every task; network = workspace-write plus network
 # access; default = the plugin's own read-only / workspace-write choice),
 # EXECUTOR (codex | qoder | dsh | antigravity | agy | acp) with EXECUTOR_COMMAND, EXECUTOR_ARGS (JSON array), EXECUTOR_MODE, EXECUTOR_PERMISSIONS, EXECUTOR_EFFORT and MODEL for a
@@ -41,7 +41,7 @@ select_companion() {
   # stops at one grep when the latest plugin is installed: the pane starts with
   # `dispatch.sh companion` under a short timeout, and a grep per cached version
   # per subcommand overran it on a busy machine.
-  for marker in 'case "observe":' 'case "events":' 'case "message":' '"thread"'; do
+  for marker in '"fork-thread"' 'case "observe":' 'case "events":' 'case "message":' '"thread"'; do
     for f in $files; do grep -q "$marker" "$f" && { cc="$f"; break 2; }; done
   done
   cc="${cc:-$(printf '%s\n' "$files" | head -1)}"
@@ -165,9 +165,9 @@ Other tasks currently running: ${SIBLINGS:-none known}
 EOF
 }
 
-# Appended after every investigate/implement/continue brief, so the report
+# Appended after every investigate/implement/continue/fork brief, so the report
 # requirement is the last thing the executor reads and also reaches threads
-# whose codex-executor skill text predates it (continue sends no director note).
+# whose codex-executor skill text predates it (continue and fork send no director note).
 evidence_footer() {
   cat <<'EOF'
 
@@ -198,6 +198,7 @@ do_launch() {
   printf '%s\n' "$CWD" > "$WORK/cwd"
   printf '%s\n' "$NAME" > "$WORK/name"
   if [ "$MODE" = continue ]; then printf '%s\n' "$THREAD" > "$WORK/thread"; fi
+  if [ "$MODE" = fork ]; then printf '%s\n' "$THREAD" > "$WORK/forked_from"; fi
 
   # Settled before the note is written: director_note tells the agent which
   # tools it has, and a default coming from the environment would otherwise
@@ -205,7 +206,14 @@ do_launch() {
   # Reviews run only on Codex, so a default executor from the environment does
   # not move them; an explicit EXECUTOR header still meets the gate below.
   local RESUME_ORIGINAL=0
-  if [ "$MODE" = continue ] && grep -q 'executor-preset' "$CC"; then
+  if [ "$MODE" = fork ]; then
+    [ -n "$THREAD" ] || { echo 'THREAD_REQUIRED: fork requires the source thread id'; exit 1; }
+    if ! grep -q '"fork-thread"' "$CC"; then
+      echo 'FORK_UNSUPPORTED: the installed plugin has no --fork-thread support; reload an updated plugin or point CODEX_COMPANION at an updated checkout'
+      exit 1
+    fi
+    RESUME_ORIGINAL=1
+  elif [ "$MODE" = continue ] && grep -q 'executor-preset' "$CC"; then
     [ -n "$THREAD" ] || { echo 'THREAD_REQUIRED: continue requires the original thread id'; exit 1; }
     RESUME_ORIGINAL=1
   else
@@ -238,6 +246,15 @@ do_launch() {
           CMD=(node "$CC" task --cwd "$CWD" --resume-last --prompt-file "$WORK/prompt.md")
         fi
       fi
+      [ -n "$EFFORT" ] && CMD+=(--effort "$EFFORT")
+      [ "$WRITE" = yes ] && CMD+=(--write) ;;
+    fork)
+      {
+        printf '本线程从线程 %s 分叉而来；原任务书及其中未完成的步骤不再约束本线程，一切以以下新任务书为准。\n\n' "$THREAD"
+        cat "$WORK/brief.md"
+        evidence_footer
+      } > "$WORK/prompt.md"
+      CMD=(node "$CC" task --cwd "$CWD" --fork-thread "$THREAD" --prompt-file "$WORK/prompt.md")
       [ -n "$EFFORT" ] && CMD+=(--effort "$EFFORT")
       [ "$WRITE" = yes ] && CMD+=(--write) ;;
     review|adversarial-review)
@@ -445,6 +462,7 @@ do_launch() {
     else
       # The companion failed before handing back a job id; report it in the same lines as a failed collect.
       echo "STATUS: failed"; echo "JOB: "; echo "NAME: $NAME"; echo "THREAD: "
+      [ "$MODE" = fork ] && [ -n "$THREAD" ] && echo "FORKED_FROM: $THREAD"
       echo "ERROR: $(grep -m1 . "$WORK/log" || echo "the companion exited without a message; see $WORK/log")"
       exit 1
     fi
@@ -463,8 +481,10 @@ work = pathlib.Path(sys.argv[1])
 cc, job_id, cwd = [(work / name).read_text().strip() for name in ("companion", "job", "cwd")]
 name = (work / "name").read_text().rstrip("\n") if (work / "name").exists() else ""
 requested_thread = (work / "thread").read_text().strip() if (work / "thread").exists() else ""
+forked_from = (work / "forked_from").read_text().strip() if (work / "forked_from").exists() else ""
+forked_line = ("\nFORKED_FROM: " + forked_from) if forked_from else ""
 if not job_id:
-    print("STATUS: failed\nJOB: \nNAME: " + name + "\nTHREAD: \nERROR: launch returned no job id; dispatch again")
+    print("STATUS: failed\nJOB: \nNAME: " + name + "\nTHREAD: " + forked_line + "\nERROR: launch returned no job id; dispatch again")
     sys.exit(1)
 deadline = time.monotonic() + 10
 while True:
@@ -473,7 +493,7 @@ while True:
         job = json.loads(raw)["job"]
     except (subprocess.CalledProcessError, ValueError, KeyError):
         # status unavailable: report started and receive later updates through job events
-        print("STATUS: started\nJOB: " + job_id + "\nNAME: " + name + "\nTHREAD: " + requested_thread)
+        print("STATUS: started\nJOB: " + job_id + "\nNAME: " + name + "\nTHREAD: " + requested_thread + forked_line)
         sys.exit(0)
     (work / "status.json").write_bytes(raw)
     status = job["status"]
@@ -488,6 +508,8 @@ print("STATUS: " + ("failed" if failed else "started"))
 print("JOB: " + job_id)
 print("NAME: " + name)
 print("THREAD: " + (job.get("threadId") or requested_thread))
+if forked_from:
+    print("FORKED_FROM: " + forked_from)
 if failed:
     error = job.get("errorMessage") or ((job.get("result") or {}).get("error") or {}).get("message")
     if not error:
