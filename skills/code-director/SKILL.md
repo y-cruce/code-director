@@ -127,7 +127,7 @@ The brief is for Codex, which has none of your conversation. Write it completely
 
 ## 验收
 - 怎样算完成：哪些测试要通过、哪条命令要跑、哪些问题要回答
-- 输出要求：要交付的结论或结果（证据要求由 dispatch.sh 追加）
+- 输出要求：要交付的结论或结果。回报格式由 dispatch.sh 追加，任务书里不要求贴命令、输出原文或 diff stat
 
 ## 已知文件（可选）
 path/to/a.py  -- 入口
@@ -158,7 +158,7 @@ Codex is sometimes wrong, and a report describes intermediate state in its own w
 
 - Spot-check one or two `file:line` references before trusting a result.
 - Before acting on a conclusion that decides what happens next (a root cause, "this message was lost", "that turn is running"), check the raw data it rests on yourself: the file, the job state, the command output.
-- A conclusion or implementation reported without evidence goes back as a `continue` asking for it; do not build on it.
+- A result that does not say which checks passed, or a conclusion with no `file:line` or commit to check, goes back as a `continue` asking for that; do not build on it.
 
 ### Judging plans and designs
 

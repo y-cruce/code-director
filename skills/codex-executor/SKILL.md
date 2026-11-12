@@ -65,11 +65,11 @@ The body comes from stdin and carries the file:line evidence. Use `--supersedes 
 
 ## Delivery
 
-The director decides from your final reply alone and does not trust a summary it cannot check, so the reply carries the evidence, not just a description of it. A reply that only summarizes is sent back for the evidence. Evidence goes in the final reply only; never send progress mid-run to supply it.
+The director decides from your final reply alone. State what you did and which checks passed, and give the locations it can check: file:line, commit hashes, output file paths. Report each check as passed or failed; do not paste commands or their output. Report in the final reply only; never send progress mid-run.
 
 End your reply with:
 
-- **Evidence**: proof that the work is done, enough for the director to check it.
+- **Evidence**: which checks passed, and the file:line, commits or files that show the work is done.
 - Any branch, commit or files the director must preserve.
 - The IDs of entries you saved.
 - "建议记住": user preferences, decisions or corrections the director should consider for memory, or "none".

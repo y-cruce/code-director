@@ -165,7 +165,7 @@ Other tasks currently running: ${SIBLINGS:-none known}
 EOF
 }
 
-# Appended after every investigate/implement/continue brief, so the evidence
+# Appended after every investigate/implement/continue brief, so the report
 # requirement is the last thing the executor reads and also reaches threads
 # whose codex-executor skill text predates it (continue sends no director note).
 evidence_footer() {
@@ -173,7 +173,7 @@ evidence_footer() {
 
 
 ---- 最终回报要求 ----
-最终回复附上完成这项工作的证据，让调度者能自行核对；只有文字总结的回复会被退回补证据。
+最终回复写明做了什么、哪些检查通过，附上调度者核对要用的位置（file:line、提交哈希、产出文件路径）。检查只报通过与否，不贴命令和输出原文。
 EOF
 }
 
