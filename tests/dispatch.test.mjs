@@ -61,19 +61,41 @@ else {
       }
     }
   }
-  const isolatedDsh = path.join(cwd, ".local/share/dsh-fork/dsh");
-  fs.mkdirSync(path.dirname(isolatedDsh), { recursive: true });
-  fs.writeFileSync(isolatedDsh, "#!/bin/sh\n", { mode: 0o755 });
-  const isolated = spawnSync("bash", [SCRIPT, "dispatch"], {
-    cwd, env: { ...env, HOME: cwd, CODEX_DIRECTOR_DSH_COMMAND: "" }, encoding: "utf8",
-    input: `MODE: investigate\nNAME: isolated DSH\nCWD: ${cwd}\nEXECUTOR: dsh\nEXECUTOR_MODE: plan\n\nInspect.\n`
-  });
-  assert.equal(isolated.status, 0, isolated.stdout + isolated.stderr);
-  const isolatedArgs = JSON.parse(fs.readFileSync(recording, "utf8"));
-  const isolatedValue = flag => isolatedArgs[isolatedArgs.indexOf(flag) + 1];
-  assert.equal(isolatedValue("--executor-command"), isolatedDsh);
-  assert.deepEqual(JSON.parse(isolatedValue("--executor-args")), ["--profile", "acp-fork"]);
-  assert.equal(isolatedValue("--executor-mode"), "plan");
+  const pathDsh = path.join(cwd, "bin/dsh");
+  fs.mkdirSync(path.dirname(pathDsh), { recursive: true });
+  fs.writeFileSync(pathDsh, "#!/bin/sh\n", { mode: 0o755 });
+  for (const row of [
+    { name: "isolated", installed: true, mode: "plan", expected: ["--profile", "acp-fork"] },
+    { name: "PATH", expected: ["--profile", "acp"] },
+    { name: "PATH override", args: ["--custom"], expected: ["--custom"] },
+    { name: "PATH mode", mode: "plan", refused: true }
+  ]) {
+    const home = path.join(cwd, row.name);
+    fs.mkdirSync(home, { recursive: true });
+    const isolatedDsh = path.join(home, ".local/share/dsh-fork/dsh");
+    if (row.installed) {
+      fs.mkdirSync(path.dirname(isolatedDsh), { recursive: true });
+      fs.writeFileSync(isolatedDsh, "#!/bin/sh\n", { mode: 0o755 });
+    }
+    const selected = spawnSync("bash", [SCRIPT, "dispatch"], {
+      cwd, env: { ...env, HOME: home, PATH: `${path.dirname(pathDsh)}${path.delimiter}${env.PATH}`, CODEX_DIRECTOR_DSH_COMMAND: "" }, encoding: "utf8",
+      input: `MODE: investigate\nNAME: ${row.name} DSH\nCWD: ${cwd}\nEXECUTOR: dsh\n${row.mode ? `EXECUTOR_MODE: ${row.mode}\n` : ""}${row.args ? `EXECUTOR_ARGS: ${JSON.stringify(row.args)}\n` : ""}\nInspect.\n`
+    });
+    if (row.refused) {
+      assert.notEqual(selected.status, 0, selected.stdout + selected.stderr);
+      assert.match(selected.stdout, /dsh ACP has no session modes/);
+      continue;
+    }
+    assert.equal(selected.status, 0, selected.stdout + selected.stderr);
+    const args = JSON.parse(fs.readFileSync(recording, "utf8"));
+    const value = flag => args[args.indexOf(flag) + 1];
+    const command = row.installed ? isolatedDsh : pathDsh;
+    assert.equal(value("--executor-command"), command);
+    assert.deepEqual(JSON.parse(value("--executor-args")), row.expected);
+    if (row.mode) assert.equal(value("--executor-mode"), row.mode);
+    else assert.equal(args.includes("--executor-mode"), false);
+    t.diagnostic(`DSH ${row.name}: ${command} ${JSON.stringify(row.expected)}`);
+  }
   const result = spawnSync("bash", [SCRIPT, "dispatch"], { cwd, env: { ...env, CODEX_DIRECTOR_EXECUTOR: "agy" }, encoding: "utf8",
     input: `MODE: continue\nNAME: original executor\nCWD: ${cwd}\nTHREAD: codex-thread\n\nContinue.\n` });
   assert.equal(result.status, 0, result.stdout + result.stderr);

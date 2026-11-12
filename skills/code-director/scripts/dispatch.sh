@@ -321,17 +321,26 @@ do_launch() {
           CMD+=(--executor acp --executor-command "$EXECUTOR_COMMAND" --executor-args '["--acp"]')
         fi ;;
       dsh)
+        local DSH_DEFAULT_ARGS='["--profile","acp-fork"]'
         EXECUTOR_COMMAND="${EXECUTOR_COMMAND:-${CODEX_DIRECTOR_DSH_COMMAND:-}}"
         if [ -z "$EXECUTOR_COMMAND" ]; then
-          EXECUTOR_COMMAND="$HOME/.local/share/dsh-fork/dsh"
-          if [ ! -x "$EXECUTOR_COMMAND" ]; then
-            echo "CODEX_FAILED: isolated dsh launcher not found at $EXECUTOR_COMMAND; install it or set CODEX_DIRECTOR_DSH_COMMAND"; exit 1
+          if [ -x "$HOME/.local/share/dsh-fork/dsh" ]; then
+            EXECUTOR_COMMAND="$HOME/.local/share/dsh-fork/dsh"
+          else
+            EXECUTOR_COMMAND=$(command -v dsh || true)
+            if [ -z "$EXECUTOR_COMMAND" ]; then
+              echo "CODEX_FAILED: dsh not found; put it on PATH or set CODEX_DIRECTOR_DSH_COMMAND"; exit 1
+            fi
+            if [ -n "$EXECUTOR_MODE" ]; then
+              echo "CODEX_FAILED: dsh ACP has no session modes; use EXECUTOR_PERMISSIONS: ask or allow-once"; exit 1
+            fi
+            DSH_DEFAULT_ARGS='["--profile","acp"]'
           fi
         fi
         # Generic ACP defaults may name Qoder modes/models. Keep the DSH
         # profile's mode and model unless the brief selects one explicitly.
         unset CODEX_COMPANION_ACP_MODE CODEX_COMPANION_ACP_MODEL
-        CMD+=(--executor acp --executor-command "$EXECUTOR_COMMAND" --executor-args "${EXECUTOR_ARGS:-[\"--profile\",\"acp-fork\"]}")
+        CMD+=(--executor acp --executor-command "$EXECUTOR_COMMAND" --executor-args "${EXECUTOR_ARGS:-$DSH_DEFAULT_ARGS}")
         # DSH exposes one-shot permissions, not Qoder's yolo session mode.
         EXECUTOR_PERMISSIONS="${EXECUTOR_PERMISSIONS:-allow-once}" ;;
       antigravity|agy)
