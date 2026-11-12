@@ -33,7 +33,7 @@ else {
   const localAgy = path.join(cwd, ".local/bin/agy");
   fs.mkdirSync(path.dirname(localAgy), { recursive: true });
   fs.writeFileSync(localAgy, "#!/bin/sh\n", { mode: 0o755 });
-  for (const [executor, command, launchArgs] of [["dsh", "/custom/dsh", ["--profile", "acp-fork"]],
+  for (const [executor, command, launchArgs] of [["dsh", "/custom/dsh", ["--profile", "acp"]],
     ["antigravity", "/custom/agy", ["acp"]], ["agy", localAgy, ["acp"]]]) {
     for (const [mode, extra] of [["investigate", ""], ["continue", "THREAD: session-test\nEXECUTOR_PERMISSIONS: ask\nEXECUTOR_ARGS: [\"--debug\"]\nEXECUTOR_EFFORT: low\n"]]) {
       const presetEnv = executor === "agy" ? { ...env, HOME: cwd, CODEX_DIRECTOR_ANTIGRAVITY_COMMAND: "" } : env;

@@ -321,11 +321,11 @@ do_launch() {
           CMD+=(--executor acp --executor-command "$EXECUTOR_COMMAND" --executor-args '["--acp"]')
         fi ;;
       dsh)
-        local DSH_DEFAULT_ARGS='["--profile","acp-fork"]'
+        local DSH_FORK_LAUNCHER="$HOME/.local/share/dsh-fork/dsh" DSH_DEFAULT_ARGS='["--profile","acp"]'
         EXECUTOR_COMMAND="${EXECUTOR_COMMAND:-${CODEX_DIRECTOR_DSH_COMMAND:-}}"
         if [ -z "$EXECUTOR_COMMAND" ]; then
-          if [ -x "$HOME/.local/share/dsh-fork/dsh" ]; then
-            EXECUTOR_COMMAND="$HOME/.local/share/dsh-fork/dsh"
+          if [ -x "$DSH_FORK_LAUNCHER" ]; then
+            EXECUTOR_COMMAND="$DSH_FORK_LAUNCHER"
           else
             EXECUTOR_COMMAND=$(command -v dsh || true)
             if [ -z "$EXECUTOR_COMMAND" ]; then
@@ -334,9 +334,11 @@ do_launch() {
             if [ -n "$EXECUTOR_MODE" ]; then
               echo "CODEX_FAILED: dsh ACP has no session modes; use EXECUTOR_PERMISSIONS: ask or allow-once"; exit 1
             fi
-            DSH_DEFAULT_ARGS='["--profile","acp"]'
           fi
         fi
+        # Only the isolated fork-capable launcher has the acp-fork profile; any
+        # other launcher (PATH dsh or a CODEX_DIRECTOR_DSH_COMMAND wrapper) keeps acp.
+        [ "$EXECUTOR_COMMAND" = "$DSH_FORK_LAUNCHER" ] && DSH_DEFAULT_ARGS='["--profile","acp-fork"]'
         # Generic ACP defaults may name Qoder modes/models. Keep the DSH
         # profile's mode and model unless the brief selects one explicitly.
         unset CODEX_COMPANION_ACP_MODE CODEX_COMPANION_ACP_MODEL
