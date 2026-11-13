@@ -165,18 +165,6 @@ Other tasks currently running: ${SIBLINGS:-none known}
 EOF
 }
 
-# Appended after every investigate/implement/continue/fork brief, so the report
-# requirement is the last thing the executor reads and also reaches threads
-# whose codex-executor skill text predates it (continue and fork send no director note).
-evidence_footer() {
-  cat <<'EOF'
-
-
----- 最终回报要求 ----
-最终回复写明做了什么、哪些检查通过，附上调度者核对要用的位置（file:line、提交哈希、产出文件路径）。检查只报通过与否，不贴命令和输出原文。
-EOF
-}
-
 do_launch() {
   local input="$1"
   # Every launch gets its own work directory: several dispatch files may sit in one
@@ -228,13 +216,13 @@ do_launch() {
   local CMD=() FOCUS CAND
   case "$MODE" in
     investigate)
-      { director_note; cat "$WORK/brief.md"; evidence_footer; } > "$WORK/prompt.md"
+      { director_note; cat "$WORK/brief.md"; } > "$WORK/prompt.md"
       CMD=(node "$CC" task --cwd "$CWD" --prompt-file "$WORK/prompt.md" ${EFFORT:+--effort "$EFFORT"}) ;;
     implement)
-      { director_note; cat "$WORK/brief.md"; evidence_footer; } > "$WORK/prompt.md"
+      { director_note; cat "$WORK/brief.md"; } > "$WORK/prompt.md"
       CMD=(node "$CC" task --cwd "$CWD" --prompt-file "$WORK/prompt.md" ${EFFORT:+--effort "$EFFORT"} --write) ;;
     continue)
-      { cat "$WORK/brief.md"; evidence_footer; } > "$WORK/prompt.md"
+      cp "$WORK/brief.md" "$WORK/prompt.md"
       if [ -n "$THREAD" ] && grep -q '"thread"' "$CC"; then
         CMD=(node "$CC" task --cwd "$CWD" --thread "$THREAD" --prompt-file "$WORK/prompt.md")
       else
@@ -252,7 +240,6 @@ do_launch() {
       {
         printf '本线程从线程 %s 分叉而来；原任务书及其中未完成的步骤不再约束本线程，一切以以下新任务书为准。\n\n' "$THREAD"
         cat "$WORK/brief.md"
-        evidence_footer
       } > "$WORK/prompt.md"
       CMD=(node "$CC" task --cwd "$CWD" --fork-thread "$THREAD" --prompt-file "$WORK/prompt.md")
       [ -n "$EFFORT" ] && CMD+=(--effort "$EFFORT")

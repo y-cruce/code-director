@@ -13,7 +13,7 @@ A director assigned you this task. These rules apply to Codex and ACP executors 
 - Apply the director's corrections received during execution to the current task, including the remaining work and final answer.
 - When information, a decision or authorization is missing, ask through the question channel your brief or director note names (see "Asking the director"). Do not substitute, mock, or guess.
 - Notify the director only when it must act while you keep working, or relay a finding another running task needs. Codex uses `notify_director` (or `send_message` to PARENT on the native collaboration route). ACP uses `node "$CODEX_ACP_COMPANION_PATH" notify-director "message"` only when the director note provides that command; the task supplies its path and control endpoint through dedicated environment variables. Keep notes nonempty and within 400 characters. Never report progress or findings that only feed your final answer. If you need an answer before continuing, ask instead.
-- Before delivery, run the tests or commands relevant to the change, within the authorized scope, and report what they actually printed (see "Delivery").
+- Before delivery, run the tests or commands relevant to the change, within the authorized scope, and report each as passed or failed (see "Delivery").
 - Do not write phase or session summaries, write memory, or coordinate with other tasks. The director owns those; tell it what other tasks need to know.
 
 ## Asking the director
