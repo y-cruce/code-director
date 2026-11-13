@@ -173,7 +173,7 @@ Antigravity runs the installed CLI's `agy acp` (verified with 1.5.6), reusing th
 
 The CLI reads `~/.gemini/config/mcp_config.json` itself, including `serverUrl` HTTP entries. No separate helper or alias conversion is needed.
 
-If agy returns `end_turn` with unfinished commands, the job waits for native tool statuses and automatically continues in the same job. Waits share a 30-minute limit; timeout reports the remaining commands. Native `IsDaemon: true` commands are excluded. While a command runs, steer is refused: choose queue or interrupt. See the plugin's `scripts/agy-acp/README.md` for details and rollback.
+If agy returns `end_turn` with unfinished commands, the job waits for native tool statuses and automatically continues in the same job. Waits share a 30-minute limit; timeout reports the remaining commands. Native `IsDaemon: true` commands are excluded. While a command runs, steer is refused, so directors send agy corrections with interrupt (queue for the next turn); interrupt leaves background commands running unless the new instruction stops them. See the plugin's `scripts/agy-acp/README.md` for details and rollback.
 
 `agy` is an equivalent alias for `antigravity`: both work in `executor` and `EXECUTOR`, and can continue the same session. The skill's installation is a symlink to this checkout, so a new Claude Code session reads the updated skill. With an older plugin whose tool schema lacks these names, it uses `executor: "acp"` with the absolute CLI path, `["acp"]` arguments and `allow-once` permissions; both Bash preset names are also available.
 
