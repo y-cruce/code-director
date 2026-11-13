@@ -38,7 +38,7 @@ Fill `mode`, `name`, `cwd` and `brief` every time (`continue` and `fork` may lea
 | Goal | `mode` | Notes |
 |---|---|---|
 | Answer a question, locate code, find a root cause | `investigate` | Read-only intent goes in the brief |
-| Implement a change from requirements | `implement` | |
+| Implement a change from requirements | `implement` | Only after you approved its plan; the build round normally `continue`s the plan thread (see "Standard pipeline") |
 | Anything further on a problem that already has a thread | `continue` | `thread` required; restores its executor and ACP launch configuration |
 | Branch an idle thread's context into a new independent task | `fork` | `thread` required (source thread); restores its executor and ACP launch configuration; source thread stays untouched |
 | Standard code review | `review` | Prefer `base`; see "Reviews" |
@@ -99,13 +99,14 @@ Events wake you by themselves. After 15 minutes without events or progress, chec
 
 ### Steering a running job
 
-Corrections to running work default to steering in the same job, thread and turn. This covers Codex, Qoder, agy's native concurrent prompt, and DSH with its steering extension when the plugin reports `midTurnSteer: true`. Do not choose queue just because the executor uses ACP.
+Corrections to running work default to steering in the same job, thread and turn. This covers Codex, Qoder, and DSH with its steering extension when the plugin reports `midTurnSteer: true`; agy is the exception below. Do not choose queue just because the executor uses ACP.
 
 | Intent | Call |
 |---|---|
 | A correction the running task should use without stopping | `mcp__codex__message`, omit `delivery` or set `delivery: "steer"` |
 | An instruction intended for the next turn, once the current one ends | `delivery: "queue"` |
 | Stop the current approach now | `delivery: "interrupt"`: cancels the turn and continues the same job and thread with the new instruction. Partial file changes stay, so report them |
+| Drop queued instructions that are now stale | `mcp__codex__cancel` with `queued: true` clears the job's queued messages and leaves the running turn alone; an ACP `queuedJobId` passed as `job` drops only that one |
 | End the job | `mcp__codex__cancel`; TaskStop cannot stop a Codex job |
 | A new round after the job finished | Dispatch `continue` |
 
@@ -147,10 +148,10 @@ path/to/b.py  -- 可疑
 ## Standard pipeline (code changes)
 
 1. Run `context.sh find` and `mcp__codex__tasks`. When a thread already investigated, verified, audited or planned this work, the implementation is a `continue` of it. If the requirement is ambiguous, ask the user first rather than letting Codex guess.
-2. Dispatch `implement` with the acceptance tests or commands. When the affected area is unclear, the same task finds it first; a separate `investigate` is for when you need its answer before you can decide what to build, and the implementation then continues that thread. When the answer splits into independent changes, `fork` that thread once per change, each in its own worktree.
+2. Plan, then build, on one thread, for every implementation you dispatch (Codex, agy, dsh or any other executor). The first round is `investigate`: ask for the minimal plan only (the files and functions to change, roughly how many lines, the existing code it reuses, and optional extensions listed separately with their cost) and say that no file is edited yet. Judge the plan with "Judging plans and designs" before any code is written; when trimming changes what the user asked for, confirm with the user. The second round `continue`s that thread with `write: true`, the approved scope, the acceptance tests or commands, and an explicit "do not build" list. A thread whose plan you already approved goes straight to the build round. When the approved plan splits into independent changes, `fork` that thread once per change, each in its own worktree (fork needs a fork-capable executor).
 3. Decide whether a review is worth it, weighing the damage a subtly wrong change could do against a brief, a wait and another round of context. When it is, dispatch `adversarial-review` with the intent of the change and your main concerns as the focus. When it is not, tell the user in one line that you skipped it and why.
 4. Judge every finding (see "Judging review findings") and send the accepted ones as `continue` with `write: true` to the implementation thread. A problem gets one review round: reviewers keep finding ever rarer defensive cases, so further rounds do not converge. Verify the fixes with tests; a fix that is still wrong goes back as another `continue` that you judge yourself.
-5. Wrap up: run the tests or verification command, spot-check one or two `file:line` claims, and report to the user.
+5. Wrap up: compare the diff with the approved plan and send anything beyond it back as a `continue` that removes it; run the tests or verification command, spot-check one or two `file:line` claims, and report to the user.
 
 Questions and investigations need one `investigate`; the user's follow-up questions on the same topic go to `continue` in its thread.
 
