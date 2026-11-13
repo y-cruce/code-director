@@ -28,7 +28,7 @@ Executors save reusable findings (repository maps, root causes, code paths, pitf
 
 Dispatch with `mcp__codex__dispatch`; several dispatches go in one message as separate tool calls. It returns in seconds with `STATUS: started`, `JOB:`, `NAME:`, `THREAD:` (plus `FORKED_FROM:` on `fork`, where `THREAD:` is the new forked thread) and sometimes a `NOTE:`. `STATUS: failed` with an `ERROR:` line and no job id, or a tool error carrying the script's line (`NAME_REQUIRED`), means the call itself was wrong: fix it and call again. `STATUS: failed` with a job id means the task started and then failed: read its reason before deciding anything, since dispatching again may duplicate work. Keep each job id with its repository and thread. The other `mcp__codex__*` tools (`message`, `answer`, `result`, `status`, `tasks`, `cancel`) cover the rest of a job's life; if they are missing from the session, read `references/cli.md`.
 
-Fill `mode`, `name`, `cwd` and `brief` every time, and other fields only when a rule below calls for them:
+Fill `mode`, `name`, `cwd` and `brief` every time (`continue` and `fork` may leave out `cwd`), and other fields only when a rule below calls for them:
 
 - `name`: three to eight words saying what the task does, distinguishable from the other tasks (`worker answer subcommand`, `root cause of brand fallback`). It labels the job in the pane, status and events, so never use a job id, a mode name or "task".
 - `cwd`: the repository or worktree Codex runs in.
@@ -71,7 +71,7 @@ Rules for `continue` and `fork`:
 - Before any `investigate` or `implement`, look for an existing thread with `mcp__codex__tasks` (a `query` from the problem's keywords; forked threads show `forked from=<thread>`) or `context.sh find`. `tasks` lists only this session's threads unless you pass `all: true`, which adds other sessions' from the last 3 days (`days` widens that); use it when the problem predates this session. If a thread already worked on the code, data or conclusions the new task depends on, `continue` it (or `fork` it when branching in parallel). When several fit, pick the one whose conclusions the task builds on directly.
 - Check the brief before sending a fresh task: if it tells Codex to read a report, plan or conclusion an earlier thread produced, or retells background a thread already worked out, send it to that thread as `continue` (or `fork` when the original thread must stay separate).
 - If the thread you want to `continue` is still running, hand it the next step with `mcp__codex__message` and `delivery: "queue"`; the round starts when its current turn ends. For `fork`, wait until the source thread finishes.
-- Both `continue` and `fork` require the source thread's `cwd`; any other path is rejected. To write in a worktree, `continue` or `fork` from the original `cwd` and name the worktree's absolute path in the brief.
+- Both `continue` and `fork` run in the source thread's `cwd`. For a thread this session dispatched, the tool takes it from the session's record and ignores the `cwd` you pass; for another session's thread, pass its original `cwd`. The job tools (`message`, `answer`, `result`, `status`, `cancel`) look up a job's `cwd` the same way. To write in a worktree, name the worktree's absolute path in the brief.
 - A `continue` brief says what changed since last time and what to do next; a `fork` brief states the new branch's goal and scope directly without repeating background already in the source thread.
 - `continue` starts a new turn once the current job has finished. While a job runs, use the controls in "Steering a running job".
 - If you dispatched a fresh task for a problem that already had a thread, cancel it and `continue` the original, telling it about any branch or worktree the cancelled task created so it reuses or removes them.
@@ -137,7 +137,7 @@ The brief is for Codex, which has none of your conversation. Write it completely
 
 ## 验收
 - 怎样算完成：哪些测试要通过、哪条命令要跑、哪些问题要回答
-- 输出要求：要交付的结论或结果。回报格式由 dispatch.sh 追加，任务书里不要求贴命令、输出原文或 diff stat
+- 输出要求：要交付的结论或结果。回报格式由 codex-executor 技能规定，任务书里不要求贴命令、输出原文或 diff stat
 
 ## 已知文件（可选）
 path/to/a.py  -- 入口
