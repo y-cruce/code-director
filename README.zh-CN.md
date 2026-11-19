@@ -153,7 +153,7 @@ NAME: worker 回答子命令
 
 ### 执行器
 
-`EXECUTOR` 决定新任务的执行器；省略时取 `$CODEX_DIRECTOR_EXECUTOR`，没设才走 Codex。需要 Codex 时显式传 `executor: "codex"`。review 不受该默认值影响。`continue` 和 `fork` 都会自动恢复原线程的执行器、ACP 命令和参数；显式指定不匹配的执行器会报错。`fork` 支持 `codex`、`qoder` 和使用 `acp-fork` 的 `dsh`；`agy`（`agy acp` 1.5.6）与 PATH 上的 `dsh`（`acp`）未声明 `session/fork`，调用时会返回 `UNSUPPORTED_CAPABILITY`。技能让一个任务由一个执行器从头做到尾：难点在找原因的交给 Codex，难点在设计和实现的交给 agy（默认模型 gemini-pro-orchestrator-neon 擅长复杂编码和前端）。其他执行器放在并行环节：辅助排查、关键改动的方案对照和评审；前端评审交给 agy，用只读 `investigate`。
+`EXECUTOR` 决定新任务的执行器；省略时取 `$CODEX_DIRECTOR_EXECUTOR`，没设才走 Codex。需要 Codex 时显式传 `executor: "codex"`。review 不受该默认值影响。`continue` 和 `fork` 都会自动恢复原线程的执行器、ACP 命令和参数；显式指定不匹配的执行器会报错。`fork` 支持 `codex`、`qoder` 和使用 `acp-fork` 的 `dsh`；`agy`（`agy acp` 1.5.6）与 PATH 上的 `dsh`（`acp`）未声明 `session/fork`，调用时会返回 `UNSUPPORTED_CAPABILITY`。技能让一个任务由一个执行器从头做到尾：难点在找原因的交给 Codex，难点在设计和实现的交给 agy（默认模型 gemini-pro-orchestrator-neon 擅长复杂编码和前端）。其他执行器放在并行环节：辅助排查、凡要出方案或设计都由 Codex 和 agy 各出一份对照和评审；前端评审交给 agy，用只读 `investigate`。
 
 旧 companion 不支持 `executor-preset` 时，continue 必须显式写原执行器；升级并重载插件后才能自动恢复。ACP 命令只在所选 companion 支持时写入调度说明，否则 dsh 把需要回答的问题写进最终回复。
 
