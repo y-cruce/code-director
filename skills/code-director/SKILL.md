@@ -98,7 +98,7 @@ Nothing waits on a job, and a job may run for any length of time; slowness is no
 | `job_completed` | The message carries Codex's final reply; `mcp__codex__result` returns the full output, including a review's complete conclusions and the thread id. Judge it (see "Judging results"). |
 | `job_failed`, `job_cancelled` | Report the reason and the most useful log lines to the user. Do not take over and redo the task yourself. |
 | `question_opened` | Answer it (see "Answering questions"). The job waits. |
-| `director_notified` | A note from a job that keeps working: clear the blocker, make the decision, relay it to the task that needs it, or start the parallel work it enables. With `pending_request=<n>`, answer that question first. |
+| `director_notified` | A note from a job that keeps working: clear the blocker, make the decision, relay it to the task that needs it, or start the parallel work it enables. With `pending_request=<n>`, answer that question first. If a note reports a major direction change sent directly by the user via the tasks pane, judge the task against the new direction instead of steering it back. |
 
 A job a subagent dispatched reports to that subagent, which handles it with the same tools. When the host refuses that delivery (for example, the user stopped the subagent), the event comes to you with a line naming the subagent; handle it or relay it.
 
@@ -106,7 +106,7 @@ Events wake you by themselves. After 15 minutes without events or progress, chec
 
 ### Steering a running job
 
-Corrections to running work default to steering in the same job, thread and turn. This covers Codex, Qoder, and DSH with its steering extension when the plugin reports `midTurnSteer: true`; agy is the exception below. Do not choose queue just because the executor uses ACP.
+Corrections to running work default to steering in the same job, thread and turn. Use it with Codex, Qoder, agy, and DSH with its steering extension when the plugin reports `midTurnSteer: true`. Do not choose queue just because the executor uses ACP.
 
 | Intent | Call |
 |---|---|
@@ -119,7 +119,7 @@ Corrections to running work default to steering in the same job, thread and turn
 
 `MESSAGED` confirms submission, not model execution. If steering is unsupported or returns `TURN_NOT_ACTIVE`/`promptRequired`, choose queue for a later turn, interrupt to stop active work, or continue a finished job; do not automatically resend as queue. Active ACP queue returns a new `queuedJobId` per instruction; active Codex queue runs the combined queued input in the same job. Idle queue starts a new job for either. Pending questions refuse steer but allow queue. A failed interrupt may already have cancelled the turn: check status before resending. ACP interrupt retains edits but returns no partial file list; inspect the assigned checkout. It retains the task's existing access settings. DSH's community adapter includes steering and keeps the original prompt open until the turn ends.
 
-For agy, send a correction the running task should act on now with `delivery: "interrupt"`, not steer: agy refuses steer while any command runs, and it moves commands longer than 10 seconds to the background, so steer fails most of the time. Interrupt leaves those background commands running; say in the new instruction whether to stop or keep them. Use queue only for an instruction meant for the next turn. If agy returns early with finite commands still running, the driver keeps the job running, reads tool statuses, and automatically continues the original task when they finish. These waits share 30 minutes; timeout reports unfinished commands. Native `IsDaemon: true` commands are excluded.
+For agy, steer while its prompt is active, including while foreground or background commands run. If agy returns early with finite commands still running, the driver keeps the job running, reads tool statuses, and automatically continues the original task when they finish. The driver refuses steer during this wait. Use `delivery: "queue"` for the next turn or `delivery: "interrupt"` to stop the wait and correct immediately. Background commands keep running after interrupt unless the new instruction stops them. These waits share 30 minutes. On timeout, the driver reports unfinished commands. Native `IsDaemon: true` commands are excluded.
 
 ### Answering questions
 

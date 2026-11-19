@@ -173,7 +173,7 @@ Antigravity 使用 CLI 自带的 `agy acp`（已验证 1.5.6），复用 CLI 登
 
 CLI 原生读取 `~/.gemini/config/mcp_config.json`，包括 `serverUrl` HTTP 配置，无需单独的 helper 或 MCP 字段转换。
 
-agy 若在命令未完成时返回 `end_turn`，任务会继续等待原生工具状态，结束后在同一 job 自动接续。多次等待共用 30 分钟上限，超时明确列出剩余命令；原生 `IsDaemon: true` 常驻进程不等待。命令运行时拒绝 steer，因此调度者给 agy 纠偏优先用 interrupt（留到下一轮的用 queue）；interrupt 不会停掉已转后台的命令，需要停的话在新指令里写明。详情与回退见插件 `scripts/agy-acp/README.md`。
+agy 本轮活跃时可以 steer，包括命令运行期间。若 agy 在命令未完成时提前返回 `end_turn`，驱动会等待原生工具状态，命令结束后在同一 job 自动接续。等待期间拒绝 steer，可用 queue 留到下一轮，或用 interrupt 立即纠偏。后台命令在 interrupt 后继续运行，需要停止时请在新指令里写明。多次等待共用 30 分钟上限，超时会列出剩余命令。原生 `IsDaemon: true` 常驻进程不纳入等待。详情与回退见插件 `scripts/agy-acp/README.md`。
 
 `agy` 是 `antigravity` 的等价别名，`executor` 字段和 `EXECUTOR` 头部都接受这两种写法，也可交替续接同一会话。技能安装路径是指向本 checkout 的软链接，新开的 Claude Code 会话会读取更新后的技能。旧版插件的工具选项尚无这两个名称时，技能会通过已有的 `executor: "acp"` 调用服务，传入绝对 CLI 路径、`["acp"]` 参数和 `allow-once` 权限；Bash 的两种执行器写法也均可用。
 
@@ -211,9 +211,9 @@ Codex 的上下文窗口很大，一个线程会记住它读过的所有代码�
 
 ### 看进度
 
-Codex 在跑的时候，执行 `/codex:status` 能看到本仓库正在跑和最近完成的任务及当前阶段。`/codex:result <job-id>` 看某次的完整输出。只要视口停在底部，任务面板会跟随不断增长的轨迹；向上滚动后会停止跟随。任务结束后会在面板保留 3 分钟。`/codex:tasks refresh` 让面板从磁盘重建，`/codex:tasks forget <序号|名称>` 去掉其中一行；主会话在 Bash 里用 `dispatch.sh pane refresh`、`dispatch.sh pane forget <序号|名称|任务 ID>` 做同样的事，`dispatch.sh pane list` 列出每一行在面板上和磁盘上的状态。这些操作都不改任务文件。
+Codex 在跑的时候，执行 `/codex:status` 能看到本仓库正在跑和最近完成的任务及当前阶段。`/codex:result <job-id>` 看某次的完整输出。只要视口停在底部，任务面板会跟随不断增长的轨迹；向上滚动后会停止跟随。任务结束后会在面板保留 6 分钟。`/codex:tasks refresh` 让面板从磁盘重建，`/codex:tasks forget <序号|名称>` 去掉其中一行；主会话在 Bash 里用 `dispatch.sh pane refresh`、`dispatch.sh pane forget <序号|名称|任务 ID>` 做同样的事，`dispatch.sh pane list` 列出每一行在面板上和磁盘上的状态。这些操作都不改任务文件。
 
-配合支持这些功能的插件和 Claude Code 2.1.299 以上版本，待回答、失败和完成事件会使用你的通知渠道。面板里任务名和状态都可以点击；没有界面的会话会说明面板无法显示。在 `/codex:tasks`、`/codex:tasks forget` 或 `/codex:message` 的目标位置输入部分名称或 ID，按 Tab 填入对应 ID；message 只补全正在运行的任务，待回答的请求用 `/codex:answer` 处理。
+配合支持这些功能的插件和 Claude Code 2.1.299 以上版本，待回答、失败和完成事件会使用你的通知渠道。面板里任务名和状态都可以点击；没有界面的会话会说明面板无法显示。在 `/codex:tasks`、`/codex:tasks forget` 或 `/codex:message` 的目标位置输入部分名称或 ID，按 Tab 填入对应 ID；message 只补全正在运行的任务，待回答的请求用 `/codex:answer` 处理。任务列表下方的输入框可直接向当前选中任务发消息（`Enter` 引导、`ctrl+x enter` 排队、`ctrl+x ctrl+s` 打断），发送时附加 `[From user via tasks pane]` 前缀；执行器照做，仅在任务方向发生重大变化时通知主 agent 一次。
 
 ### 运行中纠偏与回答
 
