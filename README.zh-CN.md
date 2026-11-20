@@ -223,7 +223,7 @@ Codex 在跑的时候，执行 `/codex:status` 能看到本仓库正在跑和最
 
 同一问题的新一轮通过另一份带 `MODE: continue` 和 `THREAD:` 的任务书再次执行 `dispatch`。待答时拒绝 steer，通过 `answer` 回答；明确排到下一轮的 queue 仍可使用。
 
-遇到结构化反问，主会话会收到 `question_opened` channel 事件，包含 request ID、问题 ID、完整问题和选项，底层 Codex 仍在等待。主会话以这些问题 ID 为键写入回答 JSON，例如 `{"<question-id>":{"answers":["..."]}}`，再执行 `/codex:answer <job-id> --request-id <id> --answers-file <绝对路径>`。已回答的 request 排除在重放之外；事件流出现 `QUESTION_PENDING` 时先查状态，再决定是否重答。默认等待回答 10 分钟，超时会中断并报告。
+遇到结构化反问，主会话会收到 `question_opened` channel 事件，包含 request ID、问题 ID、完整问题和选项，底层 Codex 仍在等待。主会话以这些问题 ID 为键写入回答 JSON，例如 `{"<question-id>":{"answers":["<选项>","user_note: <理由和要保持的范围>"]}}`（`user_note:` 一条可省略），再执行 `/codex:answer <job-id> --request-id <id> --answers-file <绝对路径>`。已回答的 request 排除在重放之外；事件流出现 `QUESTION_PENDING` 时先查状态，再决定是否重答。默认等待回答 10 分钟，超时会中断并报告。
 
 从 Bash 回答时，用 `dispatch.sh answer <job-id> <request-id> <answers-file> --cwd <repo>`。脚本发送前核对待回答请求、准确的问题 ID 和非空回答，发送后再次检查状态；成功输出 `ANSWERED job=<id> request=<id>`，失败输出 `ANSWER_FAILED` 和原因并以退出码 1 结束。`--cwd` 可放在 `answer` 后任意位置，缺省为当前目录；回答文件的相对路径按该目录解析。
 
