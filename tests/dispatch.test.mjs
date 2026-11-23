@@ -30,13 +30,20 @@ else {
     CODEX_DIRECTOR_ANTIGRAVITY_COMMAND: "/custom/agy",
     CLAUDE_CONFIG_DIR: cwd, RECORDING: recording, TMPDIR: cwd,
     CODEX_COMPANION_ACP_MODE: "yolo", CODEX_COMPANION_ACP_MODEL: "qoder-only-model" };
+  // The dsh lookup reads $DSH_HOME/profiles/acp-fork; a DSH_HOME inherited from a dsh-hosted
+  // shell would point the test at the real profile store instead of the fake $HOME.
+  delete env.DSH_HOME;
   delete env.CODEX_COMPANION_TRANSCRIPT_PATH;
   delete env.CODEX_COMPANION_SESSION_ID;
   delete env.CODEX_DIRECTOR_DSH_ARGS;
   const localAgy = path.join(cwd, ".local/bin/agy");
   fs.mkdirSync(path.dirname(localAgy), { recursive: true });
   fs.writeFileSync(localAgy, "#!/bin/sh\n", { mode: 0o755 });
-  for (const [executor, command, launchArgs] of [["dsh", "/custom/dsh", ["--profile", "acp"]],
+  // dsh: with the acp-fork profile installed in $HOME/.dsh (set up below), the default
+  // launch is acp-fork; without it, acp.
+  fs.mkdirSync(path.join(cwd, ".dsh/profiles/acp-fork"), { recursive: true });
+  fs.writeFileSync(path.join(cwd, ".dsh/profiles/acp-fork/package.json"), "{}\n");
+  for (const [executor, command, launchArgs] of [["dsh", "/custom/dsh", ["--profile", "acp-fork"]],
     ["antigravity", "/custom/agy", ["acp"]], ["agy", localAgy, ["acp"]]]) {
     for (const [mode, extra] of [
       ["investigate", ""],
@@ -44,7 +51,8 @@ else {
       ["fork", "THREAD: session-test\nEXECUTOR_PERMISSIONS: ask\nEXECUTOR_ARGS: [\"--debug\"]\nEXECUTOR_EFFORT: low\nWRITE: yes\n"]
     ]) {
       const resumed = mode === "continue" || mode === "fork";
-      const presetEnv = executor === "agy" ? { ...env, HOME: cwd, CODEX_DIRECTOR_ANTIGRAVITY_COMMAND: "" } : env;
+      // Every run uses the fake $HOME (cwd) so the dsh profile lookup is deterministic.
+      const presetEnv = executor === "agy" ? { ...env, HOME: cwd, CODEX_DIRECTOR_ANTIGRAVITY_COMMAND: "" } : { ...env, HOME: cwd };
       const result = spawnSync("bash", [SCRIPT, "dispatch"], { cwd, env: presetEnv, encoding: "utf8",
         input: `MODE: ${mode}\nNAME: ACP conversation\nCWD: ${cwd}\nEXECUTOR: ${executor}\n${extra}\nContinue the work.\n` });
       assert.equal(result.status, 0, result.stdout + result.stderr);
@@ -88,7 +96,9 @@ else {
   fs.mkdirSync(path.dirname(pathDsh), { recursive: true });
   fs.writeFileSync(pathDsh, "#!/bin/sh\n", { mode: 0o755 });
   for (const row of [
-    { name: "isolated", installed: true, mode: "plan", expected: ["--profile", "acp-fork"] },
+    // acp-fork profile installed in $DSH_HOME → PATH dsh runs it (with modes).
+    { name: "acp-fork installed", installed: true, mode: "plan", expected: ["--profile", "acp-fork"] },
+    // No acp-fork profile → acp, which has no session modes.
     { name: "PATH", expected: ["--profile", "acp"] },
     { name: "env default args", command: "/custom/dsh", envArgs: ["--profile", "acp-fork"], mode: "plan", expected: ["--profile", "acp-fork"] },
     { name: "PATH override", envArgs: ["--profile", "acp-fork"], args: ["--custom"], expected: ["--custom"] },
@@ -96,10 +106,10 @@ else {
   ]) {
     const home = path.join(cwd, row.name);
     fs.mkdirSync(home, { recursive: true });
-    const isolatedDsh = path.join(home, ".local/share/dsh-fork/dsh");
+    const profilePackage = path.join(home, ".dsh/profiles/acp-fork/package.json");
     if (row.installed) {
-      fs.mkdirSync(path.dirname(isolatedDsh), { recursive: true });
-      fs.writeFileSync(isolatedDsh, "#!/bin/sh\n", { mode: 0o755 });
+      fs.mkdirSync(path.dirname(profilePackage), { recursive: true });
+      fs.writeFileSync(profilePackage, "{}\n");
     }
     const selected = spawnSync("bash", [SCRIPT, "dispatch"], {
       cwd, env: { ...env, HOME: home, PATH: `${path.dirname(pathDsh)}${path.delimiter}${env.PATH}`,
@@ -108,13 +118,13 @@ else {
     });
     if (row.refused) {
       assert.notEqual(selected.status, 0, selected.stdout + selected.stderr);
-      assert.match(selected.stdout, /dsh ACP has no session modes/);
+      assert.match(selected.stdout, /acp profile has no session modes/);
       continue;
     }
     assert.equal(selected.status, 0, selected.stdout + selected.stderr);
     const args = JSON.parse(fs.readFileSync(recording, "utf8"));
     const value = flag => args[args.indexOf(flag) + 1];
-    const command = row.command ?? (row.installed ? isolatedDsh : pathDsh);
+    const command = row.command ?? pathDsh;
     assert.equal(value("--executor-command"), command);
     assert.deepEqual(JSON.parse(value("--executor-args")), row.expected);
     if (row.mode) assert.equal(value("--executor-mode"), row.mode);
