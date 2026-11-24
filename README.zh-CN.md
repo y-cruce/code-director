@@ -153,7 +153,7 @@ NAME: worker 回答子命令
 
 ### 执行器
 
-`EXECUTOR` 决定新任务的执行器；省略时取 `$CODEX_DIRECTOR_EXECUTOR`，没设才走 Codex。需要 Codex 时显式传 `executor: "codex"`。review 不受该默认值影响。`continue` 和 `fork` 都会自动恢复原线程的执行器、ACP 命令和参数；显式指定不匹配的执行器会报错。`fork` 支持 `codex`、`qoder`、`cca` 和使用 `acp-fork` 的 `dsh`；`agy`（`agy acp` 1.5.6）与 PATH 上的 `dsh`（`acp`）未声明 `session/fork`，调用时会返回 `UNSUPPORTED_CAPABILITY`。技能让一个任务由一个执行器从头做到尾：难点在找原因的交给 Codex，难点在设计和实现的交给 agy（默认模型 gemini-pro-orchestrator-neon 擅长复杂编码和前端）。其他执行器放在并行环节：辅助排查、凡要出方案或设计都由 Codex 和 agy 各出一份对照和评审；前端评审交给 agy，用只读 `investigate`。
+`EXECUTOR` 决定新任务的执行器；省略时取 `$CODEX_DIRECTOR_EXECUTOR`，没设才走 Codex。需要 Codex 时显式传 `executor: "codex"`。review 不受该默认值影响。`continue` 和 `fork` 都会自动恢复原线程的执行器、ACP 命令和参数；显式指定不匹配的执行器会报错。`fork` 支持 `codex`、`qoder`、`cca` 和使用 `acp-fork` 的 `dsh`；`agy`（`agy acp` 1.5.6）与 PATH 上的 `dsh`（`acp`）未声明 `session/fork`，调用时会返回 `UNSUPPORTED_CAPABILITY`。技能让一个任务由一个执行器从头做到尾：难点在找原因的交给 Codex，难点在设计和实现的交给 agy（默认跟随 `~/.gemini/antigravity-cli/settings.json` 配置，擅长复杂编码和前端）。其他执行器放在并行环节：辅助排查、凡要出方案或设计都由 Codex 和 agy 各出一份对照和评审；前端评审交给 agy，用只读 `investigate`。
 
 旧 companion 不支持 `executor-preset` 时，continue 必须显式写原执行器；升级并重载插件后才能自动恢复。ACP 命令只在所选 companion 支持时写入调度说明，否则 dsh 把需要回答的问题写进最终回复。
 
@@ -191,7 +191,7 @@ Claude Code ACP（`EXECUTOR: cca`，原生工具传 `executor: "cca"`）依次�
 
 `MODEL` 指的是执行器自己的模型。Qoder 任务不写 `MODEL` 时用 Qoder 自己设置里的默认模型。Qoder 默认跑在 `yolo` 权限模式，除非 `EXECUTOR_MODE` 另行指定——派出去的任务背后没人盯着，不能卡在权限确认上。
 
-`review` 和 `adversarial-review` 仍是 Codex 独有。ACP 用 `node "$CODEX_ACP_COMPANION_PATH" notify-director "message"` 发中途通知；agy/Qoder/cca 用原生提问，dsh 用同一个 companion 的 `ask-director --question "问题" --options '["选项一","选项二"]'`。命令等待并输出回答，接受自由文本，取消或十分钟超时非零退出。DSH bash 设 `timeoutMs:600000`；若转后台，使用 `job_output` 收同一个 job。agy 新会话由 driver 默认使用 gemini-pro-orchestrator-neon（没有思考强度选项），显式指定其他模型默认 high、Opus 默认 medium，续接不强加默认强度。
+`review` 和 `adversarial-review` 仍是 Codex 独有。ACP 用 `node "$CODEX_ACP_COMPANION_PATH" notify-director "message"` 发中途通知；agy/Qoder/cca 用原生提问，dsh 用同一个 companion 的 `ask-director --question "问题" --options '["选项一","选项二"]'`。命令等待并输出回答，接受自由文本，取消或十分钟超时非零退出。DSH bash 设 `timeoutMs:600000`；若转后台，使用 `job_output` 收同一个 job。未显式指定模型时，agy 新会话默认跟随 `~/.gemini/antigravity-cli/settings.json` 中的模型与思考强度；显式指定模型时默认 high、Opus 默认 medium（模型提供思考强度选项时），续接不强加默认强度。
 
 默认 full access 下只读意图写在任务书，ACP 权限由 agent 自身模式控制。活跃 ACP queue 返回独立 job id，活跃 Codex queue 仍在原 job，闲时 queue 两者都新开 job。待答时拒绝 steer，允许 queue；ACP interrupt 保留文件但不报告 partialChanges。DSH steer 依赖扩展，周期提问提醒只在 Monitor 模式。agy 的 new/resume 把 HOME 和链接技能目录合并进文件工具范围，并通过追加系统提示指定任务 cwd。CLI 不再生成旧 workflow 技能，插件已删除对应 Git 排除规则。
 
