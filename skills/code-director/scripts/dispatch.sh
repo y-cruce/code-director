@@ -28,7 +28,7 @@
 # Headers: NAME (required task name), MODE (investigate|implement|review|adversarial-review|continue|fork), EFFORT, MODEL, BASE, WRITE, THREAD,
 # SIBLINGS, CWD, SANDBOX (full = no sandbox, the default for every task; network = workspace-write plus network
 # access; default = the plugin's own read-only / workspace-write choice),
-# EXECUTOR (codex | qoder | dsh | antigravity | agy | acp) with EXECUTOR_COMMAND, EXECUTOR_ARGS (JSON array), EXECUTOR_MODE, EXECUTOR_PERMISSIONS, EXECUTOR_EFFORT and MODEL for a
+# EXECUTOR (codex | qoder | dsh | antigravity | agy | cca | acp) with EXECUTOR_COMMAND, EXECUTOR_ARGS (JSON array), EXECUTOR_MODE, EXECUTOR_PERMISSIONS, EXECUTOR_EFFORT and MODEL for a
 # non-Codex agent; task-class modes only. Without the header the default is $CODEX_DIRECTOR_EXECUTOR, else codex,
 # and qoder runs in its `yolo` permission mode unless EXECUTOR_MODE or $CODEX_DIRECTOR_EXECUTOR_MODE says otherwise.
 set -uo pipefail
@@ -284,7 +284,7 @@ do_launch() {
   fi
 
   # EXECUTOR picks which agent runs the task. `codex` (the default) keeps every
-  # existing flag; `qoder`, `dsh` and `antigravity` select ACP launch presets, and `acp` is
+  # existing flag; `qoder`, `dsh`, `antigravity` and `cca` select ACP launch presets, and `acp` is
   # any other ACP agent, which then needs EXECUTOR_COMMAND.
   if [ "$RESUME_ORIGINAL" = 0 ] && [ "$EXECUTOR" = codex ] && [ "${CMD[2]:-}" = task ] && grep -q 'executor-command' "$CC"; then
     # Named rather than left to the companion's default, which reads
@@ -363,6 +363,18 @@ do_launch() {
         unset CODEX_COMPANION_ACP_MODE CODEX_COMPANION_ACP_MODEL
         CMD+=(--executor acp --executor-command "$EXECUTOR_COMMAND" --executor-args "${EXECUTOR_ARGS:-[\"acp\"]}")
         EXECUTOR_PERMISSIONS="${EXECUTOR_PERMISSIONS:-allow-once}" ;;
+      cca)
+        if [ -z "$EXECUTOR_COMMAND" ]; then
+          if [ -x "$HOME/.local/bin/cc-acp" ]; then EXECUTOR_COMMAND="$HOME/.local/bin/cc-acp"
+          else EXECUTOR_COMMAND=$(command -v claude-agent-acp || true); fi
+        fi
+        if [ -z "$EXECUTOR_COMMAND" ]; then
+          echo "CODEX_FAILED: cc-acp / claude-agent-acp not found; install @agentclientprotocol/claude-agent-acp or set EXECUTOR_COMMAND"; exit 1
+        fi
+        unset CODEX_COMPANION_ACP_MODE CODEX_COMPANION_ACP_MODEL
+        CMD+=(--executor acp --executor-command "$EXECUTOR_COMMAND" --executor-args "${EXECUTOR_ARGS:-[]}")
+        EXECUTOR_MODE="${EXECUTOR_MODE:-bypassPermissions}"
+        EXECUTOR_PERMISSIONS="${EXECUTOR_PERMISSIONS:-allow-once}" ;;
       acp)
         EXECUTOR_COMMAND="${EXECUTOR_COMMAND:-${CODEX_COMPANION_ACP_COMMAND:-}}"
         if [ -z "$EXECUTOR_COMMAND" ]; then
@@ -373,7 +385,7 @@ do_launch() {
         # Mode ids are the agent's own, so an unknown agent gets no default.
         EXECUTOR_MODE="${EXECUTOR_MODE:-${CODEX_DIRECTOR_EXECUTOR_MODE:-}}" ;;
       *)
-        echo "CODEX_FAILED: EXECUTOR must be 'codex', 'qoder', 'dsh', 'antigravity' (alias 'agy') or 'acp', got '$EXECUTOR'"; exit 1 ;;
+        echo "CODEX_FAILED: EXECUTOR must be 'codex', 'qoder', 'dsh', 'antigravity' (alias 'agy'), 'cca' or 'acp', got '$EXECUTOR'"; exit 1 ;;
     esac
     [ -n "$EXECUTOR_MODE" ] && CMD+=(--executor-mode "$EXECUTOR_MODE")
     if [ -n "$EXECUTOR_PERMISSIONS" ]; then
@@ -390,7 +402,7 @@ do_launch() {
     # ultimate has xhigh, its dfmodel stops at max. So the intent goes out as
     # written and the driver settles it against the options it actually reports.
     case "$EXECUTOR" in
-      antigravity|agy) EXECUTOR_EFFORT="${EXECUTOR_EFFORT:-${CODEX_DIRECTOR_EXECUTOR_EFFORT:-}}" ;;
+      antigravity|agy|cca) EXECUTOR_EFFORT="${EXECUTOR_EFFORT:-${CODEX_DIRECTOR_EXECUTOR_EFFORT:-}}" ;;
       *) EXECUTOR_EFFORT="${EXECUTOR_EFFORT:-${CODEX_DIRECTOR_EXECUTOR_EFFORT:-xhigh}}" ;;
     esac
     [ -n "$EXECUTOR_EFFORT" ] && CMD+=(--executor-effort "$EXECUTOR_EFFORT")

@@ -73,7 +73,7 @@ else {
       assert.deepEqual(JSON.parse(value("--executor-args")), resumed ? ["--debug"] : launchArgs);
       assert.equal(value("--executor-permissions"), resumed ? "ask" : "allow-once");
       if (resumed || executor === "dsh") assert.equal(value("--executor-effort"), resumed ? "low" : "xhigh");
-      else assert.equal(args.includes("--executor-effort"), false, "agy new-session effort belongs to the driver");
+      else assert.equal(args.includes("--executor-effort"), false, `${executor} new-session effort belongs to the driver`);
       assert.equal(args.includes("--executor-mode"), false);
       assert.equal(args.includes("--executor-model"), false);
       if (mode === "continue") assert.equal(value("--thread"), "session-test");
@@ -85,7 +85,7 @@ else {
       const prompt = fs.readFileSync(value("--prompt-file"), "utf8");
       if (mode === "investigate") {
         assert.match(prompt, /notify-director/);
-        if (executor === "dsh") assert.match(prompt, /ask-director/);
+        assert.equal(/ask-director/.test(prompt), executor === "dsh");
       } else if (mode === "fork") {
         assert.match(prompt, /^本线程从线程 session-test 分叉而来；原任务书及其中未完成的步骤不再约束本线程，一切以以下新任务书为准。/);
         assert.doesNotMatch(prompt, /Who you are working with/);
@@ -130,6 +130,51 @@ else {
     if (row.mode) assert.equal(value("--executor-mode"), row.mode);
     else assert.equal(args.includes("--executor-mode"), false);
     t.diagnostic(`DSH ${row.name}: ${command} ${JSON.stringify(row.expected)}`);
+  }
+  const pathCca = path.join(cwd, "cca-bin/claude-agent-acp");
+  fs.mkdirSync(path.dirname(pathCca), { recursive: true });
+  fs.writeFileSync(pathCca, "#!/bin/sh\n", { mode: 0o755 });
+  for (const row of [
+    { name: "explicit command beats local and PATH", hasLocal: true, hasPath: true, command: "/custom/cc-acp", expected: "/custom/cc-acp" },
+    { name: "local cc-acp beats PATH", hasLocal: true, hasPath: true, expectedLocal: true },
+    { name: "PATH claude-agent-acp fallback", hasLocal: false, hasPath: true, expected: pathCca },
+    { name: "explicit overrides win and CODEX_DIRECTOR_EXECUTOR_MODE is ignored", hasLocal: false, hasPath: true,
+      mode: "plan", permissions: "ask", effort: "low", args: ["--flag"], expected: pathCca },
+    { name: "missing both fails", hasLocal: false, hasPath: false, missing: true }
+  ]) {
+    const home = path.join(cwd, `cca-${row.name.replace(/\W+/g, "-")}`);
+    fs.mkdirSync(home, { recursive: true });
+    const homeLocal = path.join(home, ".local/bin/cc-acp");
+    if (row.hasLocal) {
+      fs.mkdirSync(path.dirname(homeLocal), { recursive: true });
+      fs.writeFileSync(homeLocal, "#!/bin/sh\n", { mode: 0o755 });
+    }
+    const headers = [
+      row.command ? `EXECUTOR_COMMAND: ${row.command}` : "",
+      row.mode ? `EXECUTOR_MODE: ${row.mode}` : "",
+      row.permissions ? `EXECUTOR_PERMISSIONS: ${row.permissions}` : "",
+      row.effort ? `EXECUTOR_EFFORT: ${row.effort}` : "",
+      row.args ? `EXECUTOR_ARGS: ${JSON.stringify(row.args)}` : ""
+    ].filter(Boolean).join("\n");
+    const runPath = row.hasPath ? `${path.dirname(pathCca)}${path.delimiter}${env.PATH}` : "/usr/bin:/bin";
+    const selected = spawnSync("bash", [SCRIPT, "dispatch"], {
+      cwd, env: { ...env, HOME: home, PATH: runPath, CODEX_DIRECTOR_EXECUTOR_MODE: "yolo" }, encoding: "utf8",
+      input: `MODE: investigate\nNAME: ${row.name}\nCWD: ${cwd}\nEXECUTOR: cca\n${headers ? `${headers}\n` : ""}\nInspect.\n`
+    });
+    if (row.missing) {
+      assert.notEqual(selected.status, 0, selected.stdout + selected.stderr);
+      assert.match(selected.stdout, /CODEX_FAILED: cc-acp \/ claude-agent-acp not found/);
+      continue;
+    }
+    assert.equal(selected.status, 0, selected.stdout + selected.stderr);
+    const args = JSON.parse(fs.readFileSync(recording, "utf8"));
+    const value = flag => args[args.indexOf(flag) + 1];
+    assert.equal(value("--executor-command"), row.expectedLocal ? homeLocal : row.expected, row.name);
+    assert.deepEqual(JSON.parse(value("--executor-args")), row.args ?? [], row.name);
+    assert.equal(value("--executor-mode"), row.mode ?? "bypassPermissions", row.name);
+    assert.equal(value("--executor-permissions"), row.permissions ?? "allow-once", row.name);
+    if (row.effort) assert.equal(value("--executor-effort"), row.effort, row.name);
+    else assert.equal(args.includes("--executor-effort"), false, row.name);
   }
   for (const mode of ["continue", "fork"]) {
     const result = spawnSync("bash", [SCRIPT, "dispatch"], {
