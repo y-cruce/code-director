@@ -249,17 +249,20 @@ Codex 知道自己是被谁启动的。`investigate` 和 `implement` 两种模�
 
 **一个问题一个线程，review 只在值得时做。** 改代码类任务先派 `implement`（改动范围不清楚时先 `investigate`，再在同一线程里 `continue` 做实现）。实现回来后由 Claude 自行判断这次改动值不值得派 `adversarial-review`，审或不审都会说明。有问题让 Codex 在同一线程里用 `continue` 自己修。同一问题最多审一轮，修完用测试验证后直接收尾，不再复审。
 
-**并行改文件使用 worktree 配合写时复制。** 主 agent 为每个写入者创建独立目录，包括主 agent 自己，并把绝对路径写进 `CWD:`。插件包含 `scripts/worktree.mjs` 时，优先使用：
+**并行改文件为每个写任务新建独立 worktree，配合写时复制、数量上限与共享依赖缓存。** 主 agent 为每个并行写入者新建独立目录，把绝对路径写进 `CWD:`：
 
 ```bash
 bash ~/.claude/skills/code-director/scripts/dispatch.sh worktree /abs/source-repo /abs/new-worktree worker/topic
+bash ~/.claude/skills/code-director/scripts/dispatch.sh worktree remove /abs/source-repo /abs/worktree
 ```
 
-入口先登记独立的 Git 管理信息并固定源 HEAD，再对未修改的跟踪文件请求写时复制，在 macOS 上通过 Python 3 调用 APFS 原生 `clonefile`；源目录修改过或缺失的文件从固定提交检出。返回的 `clonedFiles`、`copiedFiles`、`checkoutFiles` 分别记录克隆、普通复制和 Git 检出数量，普通复制不代表节省磁盘。未跟踪的依赖、构建产物和会话数据不复制。创建期间保持源目录稳定。旧插件使用 `git worktree add -b worker/topic /abs/new-worktree <base-sha>`。
+新版插件在新建前用 `git worktree list --porcelain` 统计该仓已登记的 linked worktree（不含主 checkout），上限按单个仓库各自计算（各仓默认 10 个，子模块仓库单独计算，可通过 `CODEX_WORKTREE_MAX_SLOTS` 调整）；达到上限就拒绝新建且不创建目录或分支，同时逐个列出现有 worktree 的路径、分支以及有没有未提交或未跟踪文件。上限满了先用 `worktree remove` 回收已结束的 worktree 再新建；排不上的写任务等待。
+
+新建时，入口先登记独立的 Git 管理信息并固定源提交，再对未修改的跟踪文件请求写时复制，在 macOS 上通过 Python 3 调用 APFS 原生 `clonefile`；源目录修改过或缺失的文件从固定提交检出。返回的 `clonedFiles`、`copiedFiles`、`checkoutFiles` 分别记录克隆、普通复制和 Git 检出数量，普通复制不代表节省磁盘。未跟踪的依赖、构建产物和会话数据不复制。创建期间保持源目录稳定。旧插件使用 `git worktree add -b worker/topic /abs/new-worktree <base-sha>`。
 
 插件 1.4.45 起支持嵌套 Git 子模块和带检查的回收。每个子模块都有独立的 Git 管理信息和对象库，固定到父仓记录的提交；优先使用本地源子模块，否则按配置 URL 克隆。本地缺少固定提交时，即使源子模块已初始化，也会按该 URL 补取，需要正常的网络和访问权限。已有对象文件也尽可能使用写时复制，数量由 `clonedObjectFiles` / `copiedObjectFiles` 单独报告；成功返回时没有对象硬链接或 alternates 依赖。`submodules` 回执列出路径、提交、本地或远程来源及 `fetchedFromRemote`。初始化可能在主仓共享配置中补全子模块登记。访问或验证失败时保留未完成目录，不向其中派任务。判断以 Git 的 gitlink 为准，不因存在 `.gitmodules` 文件就拒绝创建。
 
-Executor 只在分配目录工作，构建前检查符号链接和绝对路径，各自维护可写依赖与产物。先提交子模块修改，再更新主仓 gitlink，并报告需要保留的提交。主 agent 在集成完成并停止任务后，通过 `dispatch.sh worktree remove /abs/source-repo /abs/worktree` 回收目录；入口检查主仓和全部子模块，存在未提交、未跟踪或忽略文件，以及不在创建时引用和远端跟踪引用中的子模块新增提交时会拒绝删除。检查通过后才使用 Git 对已初始化子模块要求的 force 参数，保留主仓分支。面板隐藏不会回收目录；线程还需要 `continue` 时必须保留原工作树。只读源码调查可以在共享仓库按固定 SHA 读取，写文件的测试也需要隔离。
+Executor 只在分配目录工作，构建前检查符号链接和绝对路径，保持编译输出留在各自目录，同时复用共享不可变依赖缓存（Maven 一律直接使用 `~/.m2/repository`，禁止复制或克隆 `~/.m2`，也不许用 `-Dmaven.repo.local` 指向其他目录；Go 共用全局 `GOMODCACHE`/`GOCACHE`；Node 优先 `pnpm`），禁止硬链接或软链接共享的可写输出目录。先提交子模块修改，再更新主仓 gitlink，并报告需要保留的提交。主 agent 在集成完成并停止任务后，用 `dispatch.sh worktree remove <source-repo> <worktree>` 回收目录；`remove` 检查主仓和全部子模块，存在未提交、未跟踪或忽略文件、主仓 `HEAD` 里有未被任何分支/标签/远端引用可达的提交（新版插件会列出这些提交的 SHA），以及不在创建时引用和远端跟踪引用中的子模块新增提交时会拒绝删除。检查通过后才使用 Git 对已初始化子模块要求的 force 参数，保留主仓分支。面板隐藏不会回收目录；线程还需要 `continue` 时必须保留它的 worktree。只读源码调查可以在共享仓库按固定 SHA 读取，写文件的测试也需要隔离。
 
 **后台启动、用事件代替等待。** task 类任务使用插件原生后台任务，`dispatch` 最多检查启动状态 10 秒，任务进入 running 且已有线程 ID，或任务已结束时提前返回。检查期间失败的任务，以及 companion 拒绝启动的派发，都返回 `STATUS: failed` 和一行 `ERROR:`；后续完成、结构化反问和通知经插件的 director channel 回到主会话。review 类任务分离启动，任务 ID 随完成或失败事件送达。
 

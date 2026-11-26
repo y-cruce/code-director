@@ -74,7 +74,7 @@ Use plain-language briefs, not the old `MODE` headers. An investigation is expli
 
 ## Shared files and parallel work
 
-Native agents share the filesystem. The main agent creates and owns isolated worktrees or checkouts for parallel writers, including itself when it also writes. Use available workspace/Git tools and assign each writer an absolute directory; never use hard links or shared writable build outputs for isolation. Read-only agents may inspect the same fixed revision.
+Native agents share the filesystem. The main agent creates and owns a fresh isolated worktree for each parallel writer (default cap: 10 linked worktrees per repository; when full, remove finished worktrees first and let extra write tasks wait), including itself when it also writes. Assign each writer an absolute directory; keep writable build outputs local, reuse shared immutable dependency caches (Maven: use `~/.m2/repository` directly, never copy or clone `~/.m2` or point `-Dmaven.repo.local` elsewhere; Go: share global `GOMODCACHE`/`GOCACHE`; Node: prefer `pnpm`), and never hard-link or symlink shared writable build outputs. Keep a worktree while its thread still needs `continue`, and remove it after integrating commits and stopping the task. Read-only agents may inspect the same fixed revision.
 
 If separate directories are unnecessary, serialize writes in the shared checkout. Include relevant uncommitted changes in the brief and preserve them. Executors work only in their assigned directory and do not create or delete other tasks' worktrees. Commit, push, merge, install, and deploy only within the user's authorized scope. Keep a directory while its task may need follow-up; inspect its remaining files and commits before cleanup.
 

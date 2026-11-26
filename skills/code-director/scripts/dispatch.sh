@@ -16,9 +16,9 @@
 #                                          manually compact an idle Codex thread's context; print COMPACTED or COMPACT_FAILED
 #   dispatch.sh companion              print the selected codex-companion.mjs path
 #   dispatch.sh worktree <source-repo> <new-directory> <new-branch>
-#                                          register an independent worktree and clone tracked files where supported
+#                                          register an independent worktree and clone tracked files where supported (default cap: 10 linked worktrees per repo)
 #   dispatch.sh worktree remove <source-repo> <worktree>
-#                                          remove after checking files and submodule commits
+#                                          remove after checking files, unreachable parent commits, and submodule commits
 #   dispatch.sh pane [list|refresh|forget <n|name|task id>]
 #                                          ask this session's tasks pane for its rows (pane vs disk status), make it
 #                                          rebuild from disk, or hide one row; job files are never touched
@@ -162,7 +162,7 @@ EOF
   [ -n "$WORKSPACE_ROOTS" ] && workspace_scope="the assigned CWD and the additional workspace roots (${WORKSPACE_ROOTS})"
   cat <<EOF
 - Other tasks started by the same director may be running in this workspace. Do not coordinate with them yourself; tell the director what they need to know (through notify_director while they may still need it, otherwise in your final message).
-- Work only in ${workspace_scope}. The director owns worktree creation and cleanup. APFS clones have independent files but may retain symlinks or absolute paths into another checkout: check those before builds, keep outputs local, and never replace isolation with hard links or shared writable dependencies. Do not copy a worktree's .git file or delete another task's directory. Submodules have independent Git state at the parent's pinned commits; commit submodule edits before updating the parent gitlink, and report any submodule commits that must be preserved before cleanup. Report the branch, commit and any remaining files the director must preserve when you finish.
+- Work only in ${workspace_scope}. The director owns worktree creation and cleanup. APFS clones have independent files but may retain symlinks or absolute paths into another checkout: check those before builds, keep build outputs local, and reuse shared immutable dependency caches instead of duplicating them (Maven: use ~/.m2/repository directly, never copy or clone ~/.m2, and never point -Dmaven.repo.local elsewhere; Go: share global GOMODCACHE and GOCACHE; Node: prefer pnpm; never hard-link or symlink shared writable outputs). Do not copy a worktree's .git file or delete another task's directory. Submodules have independent Git state at the parent's pinned commits; commit submodule edits before updating the parent gitlink, and report any submodule commits that must be preserved before cleanup. Report the branch, commit and any remaining files the director must preserve when you finish.
 EOF
   executor_skill_note
   cat <<EOF
@@ -818,5 +818,5 @@ case "${1:-}" in
   answer)    shift; do_answer "$@" ;;
   compact)   shift; do_compact "$@" ;;
   pane)      shift; CC=$(select_companion) || exit 1; node "$CC" pane "$@" ;;
-  *) echo "usage: dispatch.sh dispatch [input-file] | launch <input-file> | collect <WORK> | companion | worktree <source-repo> <new-directory> <new-branch> | events --cwd <repo> | follow <job-id> --cwd <repo> [--after <cursor>] | message <job-id> <prompt-file> [--cwd <repo>] [--interrupt] | answer <job-id> <request-id> <answers-file> [--cwd <repo>] | compact (<job-id> | --thread <thread-id>) [--cwd <repo>] | pane [list|refresh|forget <n|name|task id>]"; exit 1 ;;
+  *) echo "usage: dispatch.sh dispatch [input-file] | launch <input-file> | collect <WORK> | companion | worktree (<source-repo> <new-directory> <new-branch> | remove <source-repo> <worktree>) | events --cwd <repo> | follow <job-id> --cwd <repo> [--after <cursor>] | message <job-id> <prompt-file> [--cwd <repo>] [--interrupt] | answer <job-id> <request-id> <answers-file> [--cwd <repo>] | compact (<job-id> | --thread <thread-id>) [--cwd <repo>] | pane [list|refresh|forget <n|name|task id>]"; exit 1 ;;
 esac

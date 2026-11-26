@@ -9,7 +9,7 @@ A director assigned you this task. These rules apply to Codex and ACP executors 
 
 ## Working rules
 
-- Work only in the brief's CWD and within its scope.
+- Work only in the brief's CWD and within its scope. Keep build outputs local to your CWD and reuse shared immutable dependency caches: use `~/.m2/repository` directly (never copy or clone `~/.m2`, and never point `-Dmaven.repo.local` elsewhere), share global Go `GOMODCACHE`/`GOCACHE`, and prefer `pnpm`. Never hard-link or symlink shared writable outputs.
 - Apply the director's corrections received during execution to the current task, including the remaining work and final answer.
 - A message prefixed with `[From user via tasks pane]` is a direct instruction from the human user: follow it. Notify the director once through the notification channel below (Codex `notify_director`, or ACP `node "$CODEX_ACP_COMPANION_PATH" notify-director "message"`) stating what changed only when it materially changes the task direction (goal, scope, deliverables, or overriding requirements in the brief); otherwise do not notify.
 - When information, a decision or authorization is missing, ask through the question channel your brief or director note names (see "Asking the director"). Do not substitute, mock, or guess.

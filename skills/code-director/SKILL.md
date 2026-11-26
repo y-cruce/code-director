@@ -63,7 +63,7 @@ For qoder, dsh, Antigravity, cca or another ACP agent, read `references/executor
 
 **What executors are told.** For `investigate` and `implement`, dispatch.sh prepends the director note and executor skill entry. For `fork`, dispatch.sh prepends a one-line fork notice naming the source thread and stating that the earlier brief and unfinished steps no longer bind the forked thread; the director note is omitted because it is already in the inherited history. Codex uses `request_user_input` and `notify_director`; ACP sends notes with `node "$CODEX_ACP_COMPANION_PATH" notify-director "message"`. agy, Qoder and cca use native questions; dsh uses the blocking `ask-director` command from the skill. The codex-executor skill sets the final-report format; leave it out of your brief. Tasks never talk to each other: relay relevant findings and list overlapping tasks in `siblings`.
 
-**Parallel writes.** Only one writer works in a checkout at a time, you included. Give each parallel route that writes files its own worktree, created before dispatch and passed as `cwd`; read `references/worktrees.md` to create and remove them.
+**Parallel writes.** Only one writer works in a checkout at a time, you included. Create a fresh worktree (`worktree <source-repo> <new-directory> <new-branch>`) for each parallel writer before dispatch, pass its `cwd`, keep it while the thread still needs `continue`, and recycle it with `worktree remove` after stopping the task and integrating commits. When the per-repo cap (default 10 linked worktrees, `CODEX_WORKTREE_MAX_SLOTS`) is full, remove finished worktrees first and let extra write tasks wait until one is removed; read `references/worktrees.md` for creation, shared dependency caches, and cleanup.
 
 ### Thread continuity
 
