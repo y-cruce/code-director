@@ -199,7 +199,7 @@ Claude Code ACP（`EXECUTOR: cca`，原生工具传 `executor: "cca"`）依次�
 
 必填头部：`NAME` 用几个词说明任务内容，超过 80 个字符会截断。名称显示在 dispatch/collect 输出的 `JOB:` 后；插件支持 `task --label` 时，也会显示在 status 和事件的任务 ID 旁，旧插件会输出提示并照常启动。review 命令同样传名称。
 
-可选头部：`EFFORT`（`medium` / `high` / `xhigh` / `max`；不写时，新任务用你 Codex 配置里的 `model_reasoning_effort`，`continue` 和 `fork` 沿用该线程上次的级别）、`MODEL`（缺省用你 Codex 配置里的模型）、`BASE`（review 类的基准分支）、`THREAD`（`continue` 要续接的线程，或 `fork` 要分叉的源线程）、`SIBLINGS`（一行写明其他正在跑的 Codex 任务，会给 Codex 看）、`CWD`（在哪个仓库里跑；`continue` 和 `fork` 必须填原线程的 `cwd`）。
+可选头部：`EFFORT`（`medium` / `high` / `xhigh` / `max`；不写时，新任务用你 Codex 配置里的 `model_reasoning_effort`，`continue` 和 `fork` 沿用该线程上次的级别）、`MODEL`（缺省用你 Codex 配置里的模型）、`BASE`（review 类的基准分支）、`THREAD`（`continue` 要续接的线程，或 `fork` 要分叉的源线程）、`SIBLINGS`（一行写明其他正在跑的 Codex 任务，会给 Codex 看）、`CWD`（在哪个仓库里跑；`continue` 和 `fork` 必须填原线程的 `cwd`）、`WORKSPACE_ROOTS`（跨仓库 Codex task 模式的额外工作区根目录 JSON 数组，按重复的 `--workspace-root` 透传）。
 
 ### 线程连续性
 
@@ -210,6 +210,7 @@ Codex 的上下文窗口很大，一个线程会记住它读过的所有代码�
 - 两个以上并行任务都要依赖同一次前置排查或上下文（比如一次调查后分到多个 worktree 并行写实现，或在不改动原线程的前提下试另一套做法），用 `MODE: fork` 搭配源线程的 `THREAD:`。源线程必须已跑完闲置，`CWD:` 仍填源线程目录，要在 worktree 里改文件就把 worktree 绝对路径写进任务书；分叉线程后续再追问时，对它返回的新 `THREAD:` 执行 `MODE: continue`。预计要从某次调查分叉时，把这次调查派给支持 fork 的执行器（`codex`、`qoder`、`cca` 或使用 `acp-fork` 的 `dsh`）；agy 线程只能 continue。
 - 按下一步需要的上下文选线程。调查、验证或方案得出结论后，按结论实现或做端到端验证都续那个线程，从只读转为写代码、改动别的文件也一样。任务书要让新任务去读某个线程写的报告时，直接交给那个线程；该线程还在跑，就用 `message --queue` 把下一步排给它。评审和独立二审始终新建线程。
 - 实现分两轮，在同一个线程上做：先用 `investigate` 只出最小方案、不改文件；Claude 删减并批准后，再用 `continue` 加 `WRITE: yes` 按批准的范围实现。
+- 长期闲置的 Codex 线程上下文过重时，可在下次 `continue` 前运行 `bash ~/.claude/skills/code-director/scripts/dispatch.sh compact (<job-id> | --thread <thread-id>) [--cwd <repo>]` 手动压缩上下文（仅限闲置的 Codex 线程；输出 `COMPACTED [job=<id>] thread=<thread>`、`COMPACT_FAILED ...`，旧版插件输出 `COMPACT_UNSUPPORTED:` 并以退出码 2 返回）。
 - dispatch.sh 会核对请求的线程和插件即将续的线程是否一致，不一致就报 `THREAD_MISMATCH`，不会悄悄续到错的线程上。
 
 插件支持 `task --thread <id>` 时（见 [openai/codex-plugin-cc#719](https://github.com/openai/codex-plugin-cc/pull/719)），dispatch.sh 精确续到指定线程，多个问题可以随意交错。旧版插件只能续当前 Claude 会话在这个仓库里最近一个跑完的 task 线程，dispatch.sh 会退回候选校验，Claude 也会避免在两次 `continue` 之间往这个仓库派其他 task 类任务。
@@ -273,7 +274,7 @@ Executor 只在分配目录工作，构建前检查符号链接和绝对路径�
 - 改了 `~/.claude/skills/` 里的技能，同一会话不会立刻生效，要 `/reload-plugins` 或重开会话。
 - 官方插件的 `review` 模式不接受关注点文本，只有 `adversarial-review` 接受。
 - `continue` 用于上一任务结束后的续接；运行中使用 `message` 或 `answer`，不支持实时控制的旧插件仍需等任务结束。
-- 插件按「Claude 会话 + 插件安装路径」各起一个共享的 Codex 运行时，它创建过的线程都被它持有写锁。换过插件安装来源之后（比如从 `codex@openai-codex` 换到 `codex@y-cruce-codex`），要重开 Claude 会话；旧安装下创建的线程在旧运行时退出前续不上。
+- 本地运行受管的 `codex app-server daemon`（且未设置 `CODEX_COMPANION_DISABLE_DAEMON`）时，插件会接入该共享 daemon 并在任务结束时调用 `thread/unsubscribe`，已完成的线程不再被旧 broker 长期持锁。没有 daemon 时仍回退为按「Claude 会话 + 插件安装路径」各起一个共享的 Codex 运行时；换过插件安装来源之后（比如从 `codex@openai-codex` 换到 `codex@y-cruce-codex`），仍建议重开 Claude 会话以释放旧运行时持有的线程。
 - 只在 macOS 上验证过。脚本用 `python3` 和标准 shell 工具，Linux 应该能用，没测。
 
 ## 许可

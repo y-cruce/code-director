@@ -66,6 +66,7 @@ Antigravity CLI setup and rollback details are in the plugin's `scripts/agy-acp/
 **What you lose off Codex:**
 
 - Native `review` and `adversarial-review` modes are refused: they use Codex's own review, which has no ACP equivalent. Frontend reviews still go to agy as `investigate` tasks with a read-only review brief.
+- Manual context compaction (`dispatch.sh compact`) and extra workspace roots (`WORKSPACE_ROOTS`) are Codex-only.
 - `effort` does not reach the agent. ACP uses `executor_effort` (or `$CODEX_DIRECTOR_EXECUTOR_EFFORT`) with values advertised by the agent.
 - ACP notes use `node "$CODEX_ACP_COMPANION_PATH" notify-director "message"`; they produce the same `director.notified` event as Codex and continue working. agy/Qoder/cca use native questions; dsh uses `ask-director`. Question and permission requests expire after ten minutes and interrupt the active turn. Only Monitor mode sends periodic unanswered-question reminders.
 - Use default steering with Qoder, agy, cca, and DSH with its extension when `midTurnSteer: true`. If the executor rejects steer or lacks that capability, use queue for a later turn or interrupt when active work must stop.

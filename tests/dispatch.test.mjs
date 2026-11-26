@@ -293,3 +293,124 @@ if (process.argv[2] === "status") {
     assert.match(res.stdout, pattern, label);
   }
 });
+
+test("WORKSPACE_ROOTS passes repeatable --workspace-root for Codex task modes and rejects unsupported cases", (t) => {
+  const cwd = fs.mkdtempSync(path.join(os.tmpdir(), "workspace-roots-dispatch-test-"));
+  t.after(() => fs.rmSync(cwd, { recursive: true, force: true }));
+  const companion = path.join(cwd, "companion.mjs");
+  const legacyCompanion = path.join(cwd, "legacy-companion.mjs");
+  const recording = path.join(cwd, "args.json");
+  fs.writeFileSync(companion, `import fs from "node:fs";
+// Capability markers: executor-command executor-preset "executor-permissions" "workspace-root" "label" "thread" "fork-thread" danger-full-access case "message":
+if (process.argv[2] === "status") {
+  console.log(JSON.stringify({ job: { id: "task-roots", status: "running", threadId: "codex-roots-thread" } }));
+} else {
+  fs.writeFileSync(process.env.RECORDING, JSON.stringify(process.argv.slice(2)));
+  console.log(JSON.stringify({ jobId: "task-roots" }));
+}
+`);
+  fs.writeFileSync(legacyCompanion, `import fs from "node:fs";
+// Capability markers: executor-command executor-preset "label" "thread" "fork-thread" danger-full-access case "message":
+console.log(JSON.stringify({ jobId: "task-old" }));
+`);
+  const env = { ...process.env, HOME: cwd, TMPDIR: cwd, CLAUDE_CONFIG_DIR: cwd,
+    CODEX_COMPANION: companion, RECORDING: recording, CODEX_DIRECTOR_ANTIGRAVITY_COMMAND: "/custom/agy" };
+  delete env.CODEX_COMPANION_TRANSCRIPT_PATH;
+  delete env.CODEX_COMPANION_SESSION_ID;
+
+  const roots = ["/abs/repo-a", "/abs/repo with space"];
+  for (const [mode, extra] of [
+    ["investigate", "EXECUTOR: codex\n"],
+    ["implement", "EXECUTOR: codex\n"],
+    ["continue", "THREAD: codex-roots-thread\n"],
+    ["fork", "THREAD: codex-roots-thread\n"],
+  ]) {
+    const res = spawnSync("bash", [SCRIPT, "dispatch"], {
+      cwd, env, encoding: "utf8",
+      input: `MODE: ${mode}\nNAME: cross-repo ${mode}\nCWD: ${cwd}\nWORKSPACE_ROOTS: ${JSON.stringify(roots)}\n${extra}\nCheck both repos.\n`
+    });
+    assert.equal(res.status, 0, `${mode}: ${res.stdout + res.stderr}`);
+    const args = JSON.parse(fs.readFileSync(recording, "utf8"));
+    const passedRoots = [];
+    for (let i = 0; i < args.length; i += 1) {
+      if (args[i] === "--workspace-root") passedRoots.push(args[i + 1]);
+    }
+    assert.deepEqual(passedRoots, roots, mode);
+    if (mode === "investigate") {
+      const prompt = fs.readFileSync(args[args.indexOf("--prompt-file") + 1], "utf8");
+      assert.match(prompt, /additional workspace roots/);
+    }
+  }
+
+  for (const [label, extra, pattern, overrideEnv] of [
+    ["non-Codex new task", "MODE: investigate\nEXECUTOR: agy\nWORKSPACE_ROOTS: [\"/abs/a\"]\n", /only supported for Codex tasks/, {}],
+    ["non-Codex continue", "MODE: continue\nTHREAD: t1\nEXECUTOR: agy\nWORKSPACE_ROOTS: [\"/abs/a\"]\n", /only supported for Codex tasks/, {}],
+    ["review mode", "MODE: review\nBASE: main\nWORKSPACE_ROOTS: [\"/abs/a\"]\n", /only supported for task modes/, {}],
+    ["invalid JSON", "MODE: investigate\nEXECUTOR: codex\nWORKSPACE_ROOTS: /abs/a\n", /invalid WORKSPACE_ROOTS/, {}],
+    ["empty array", "MODE: investigate\nEXECUTOR: codex\nWORKSPACE_ROOTS: []\n", /invalid WORKSPACE_ROOTS/, {}],
+    ["legacy companion", "MODE: investigate\nEXECUTOR: codex\nWORKSPACE_ROOTS: [\"/abs/a\"]\n", /no --workspace-root support/, { CODEX_COMPANION: legacyCompanion }],
+  ]) {
+    const res = spawnSync("bash", [SCRIPT, "dispatch"], {
+      cwd, env: { ...env, ...overrideEnv }, encoding: "utf8",
+      input: `NAME: reject ${label}\nCWD: ${cwd}\n${extra}\nBody.\n`
+    });
+    assert.notEqual(res.status, 0, label);
+    assert.match(res.stdout, pattern, label);
+  }
+});
+
+test("compact subcommand forwards job or thread target, formats output, and handles errors", (t) => {
+  const cwd = fs.mkdtempSync(path.join(os.tmpdir(), "compact-dispatch-test-"));
+  t.after(() => fs.rmSync(cwd, { recursive: true, force: true }));
+  const companion = path.join(cwd, "companion.mjs");
+  const legacyCompanion = path.join(cwd, "legacy-companion.mjs");
+  const recording = path.join(cwd, "compact-args.json");
+  fs.writeFileSync(companion, `import fs from "node:fs";
+// Capability markers: case "compact":
+if (process.argv[2] === "compact") {
+  fs.writeFileSync(process.env.RECORDING, JSON.stringify(process.argv.slice(2)));
+  if (process.argv.includes("job-active")) {
+    console.error("Thread thr-1 is still running (job-active); wait for it to finish or cancel it before compacting.");
+    process.exit(1);
+  }
+  const threadIdx = process.argv.indexOf("--thread");
+  if (threadIdx !== -1) {
+    console.log(JSON.stringify({ jobId: null, threadId: process.argv[threadIdx + 1], turnId: "turn-1", compacted: true }));
+  } else {
+    console.log(JSON.stringify({ jobId: process.argv[3], threadId: "thr-1", turnId: "turn-1", compacted: true }));
+  }
+}
+`);
+  fs.writeFileSync(legacyCompanion, `// no compact support\n`);
+  const env = { ...process.env, HOME: cwd, TMPDIR: cwd, CODEX_COMPANION: companion, RECORDING: recording };
+
+  const byJob = spawnSync("bash", [SCRIPT, "compact", "job-123", "--cwd", cwd], { cwd, env, encoding: "utf8" });
+  assert.equal(byJob.status, 0, byJob.stdout + byJob.stderr);
+  assert.equal(byJob.stdout.trim(), "COMPACTED job=job-123 thread=thr-1");
+  assert.deepEqual(JSON.parse(fs.readFileSync(recording, "utf8")), ["compact", "job-123", "--cwd", cwd, "--json"]);
+
+  const byThread = spawnSync("bash", [SCRIPT, "compact", "--cwd", cwd, "--thread", "thr-9"], { cwd, env, encoding: "utf8" });
+  assert.equal(byThread.status, 0, byThread.stdout + byThread.stderr);
+  assert.equal(byThread.stdout.trim(), "COMPACTED thread=thr-9");
+  assert.deepEqual(JSON.parse(fs.readFileSync(recording, "utf8")), ["compact", "--thread", "thr-9", "--cwd", cwd, "--json"]);
+
+  const failed = spawnSync("bash", [SCRIPT, "compact", "job-active", "--cwd", cwd], { cwd, env, encoding: "utf8" });
+  assert.equal(failed.status, 1);
+  assert.match(failed.stdout, /^COMPACT_FAILED job=job-active Thread thr-1 is still running/);
+
+  for (const [label, cliArgs] of [
+    ["missing target", []],
+    ["both job and thread", ["job-1", "--thread", "thr-1"]],
+    ["unknown option", ["--bogus", "job-1"]],
+  ]) {
+    const bad = spawnSync("bash", [SCRIPT, "compact", ...cliArgs], { cwd, env, encoding: "utf8" });
+    assert.equal(bad.status, 1, label);
+    assert.match(bad.stdout, /^COMPACT_FAILED /, label);
+  }
+
+  const unsupported = spawnSync("bash", [SCRIPT, "compact", "job-1", "--cwd", cwd], {
+    cwd, env: { ...env, CODEX_COMPANION: legacyCompanion }, encoding: "utf8"
+  });
+  assert.equal(unsupported.status, 2);
+  assert.match(unsupported.stdout, /^COMPACT_UNSUPPORTED:/);
+});

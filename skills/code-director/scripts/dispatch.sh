@@ -12,6 +12,8 @@
 #                                          next turn once this one ends; --interrupt = cancel this turn and run it now
 #   dispatch.sh answer <job-id> <request-id> <answers-file> [--cwd <repo>]
 #                                          deliver answers to a structured question
+#   dispatch.sh compact (<job-id> | --thread <thread-id>) [--cwd <repo>]
+#                                          manually compact an idle Codex thread's context; print COMPACTED or COMPACT_FAILED
 #   dispatch.sh companion              print the selected codex-companion.mjs path
 #   dispatch.sh worktree <source-repo> <new-directory> <new-branch>
 #                                          register an independent worktree and clone tracked files where supported
@@ -26,7 +28,7 @@
 #
 # Input file format: `KEY: value` header lines, a blank line, then the brief body.
 # Headers: NAME (required task name), MODE (investigate|implement|review|adversarial-review|continue|fork), EFFORT, MODEL, BASE, WRITE, THREAD,
-# SIBLINGS, CWD, SANDBOX (full = no sandbox, the default for every task; network = workspace-write plus network
+# SIBLINGS, CWD, WORKSPACE_ROOTS (JSON array of extra workspace root paths for cross-repo Codex task modes), SANDBOX (full = no sandbox, the default for every task; network = workspace-write plus network
 # access; default = the plugin's own read-only / workspace-write choice),
 # EXECUTOR (codex | qoder | dsh | antigravity | agy | cca | acp) with EXECUTOR_COMMAND, EXECUTOR_ARGS (JSON array), EXECUTOR_MODE, EXECUTOR_PERMISSIONS, EXECUTOR_EFFORT and MODEL for a
 # non-Codex agent; task-class modes only. SWARM (yes) runs an agy /swarm coordinator for new investigate or implement tasks on antigravity/agy only. Without the header the default is $CODEX_DIRECTOR_EXECUTOR, else codex,
@@ -41,7 +43,7 @@ select_companion() {
   # stops at one grep when the latest plugin is installed: the pane starts with
   # `dispatch.sh companion` under a short timeout, and a grep per cached version
   # per subcommand overran it on a busy machine.
-  for marker in '"fork-thread"' 'case "observe":' 'case "events":' 'case "message":' '"thread"'; do
+  for marker in 'case "compact":' '"workspace-root"' '"fork-thread"' 'case "observe":' 'case "events":' 'case "message":' '"thread"'; do
     for f in $files; do grep -q "$marker" "$f" && { cc="$f"; break 2; }; done
   done
   cc="${cc:-$(printf '%s\n' "$files" | head -1)}"
@@ -55,13 +57,13 @@ select_companion() {
 # Reads $1 (the input file). Sets the header variables and writes the body to $WORK/brief.md.
 parse_input() {
   local line key val in_header=1
-  NAME=""; MODE=""; EFFORT=""; MODEL=""; BASE=""; WRITE=""; THREAD=""; SIBLINGS=""; CWD=""; SANDBOX=""; EXECUTOR=""; EXECUTOR_MODE=""; EXECUTOR_PERMISSIONS=""; EXECUTOR_EFFORT=""; EXECUTOR_COMMAND=""; EXECUTOR_ARGS=""; SWARM=""
+  NAME=""; MODE=""; EFFORT=""; MODEL=""; BASE=""; WRITE=""; THREAD=""; SIBLINGS=""; CWD=""; WORKSPACE_ROOTS=""; SANDBOX=""; EXECUTOR=""; EXECUTOR_MODE=""; EXECUTOR_PERMISSIONS=""; EXECUTOR_EFFORT=""; EXECUTOR_COMMAND=""; EXECUTOR_ARGS=""; SWARM=""
   : > "$WORK/brief.md"
   while IFS= read -r line || [ -n "$line" ]; do
     if [ "$in_header" = 1 ]; then
       if [ -z "$line" ]; then in_header=0; continue; fi
       case "$line" in
-        NAME:*|MODE:*|EFFORT:*|MODEL:*|BASE:*|WRITE:*|THREAD:*|SIBLINGS:*|CWD:*|SANDBOX:*|EXECUTOR:*|EXECUTOR_MODE:*|EXECUTOR_PERMISSIONS:*|EXECUTOR_EFFORT:*|EXECUTOR_COMMAND:*|EXECUTOR_ARGS:*|SWARM:*)
+        NAME:*|MODE:*|EFFORT:*|MODEL:*|BASE:*|WRITE:*|THREAD:*|SIBLINGS:*|CWD:*|WORKSPACE_ROOTS:*|SANDBOX:*|EXECUTOR:*|EXECUTOR_MODE:*|EXECUTOR_PERMISSIONS:*|EXECUTOR_EFFORT:*|EXECUTOR_COMMAND:*|EXECUTOR_ARGS:*|SWARM:*)
           key=${line%%:*}; val=${line#*:}; val=${val#"${val%%[![:space:]]*}"}
           printf -v "$key" '%s' "$val" ;;
         *) in_header=0; printf '%s\n' "$line" >> "$WORK/brief.md" ;;
@@ -156,9 +158,11 @@ EOF
 - To notify the director while continuing work, run: node "$CODEX_ACP_COMPANION_PATH" notify-director "message". Use this only for a blocker or decision the director must act on now, or a finding another running task needs. Do not send progress or findings that belong in your final reply. Messages must be nonempty and at most 400 characters. This command does not return a director answer.
 EOF
   fi
+  local workspace_scope="the assigned CWD"
+  [ -n "$WORKSPACE_ROOTS" ] && workspace_scope="the assigned CWD and the additional workspace roots (${WORKSPACE_ROOTS})"
   cat <<EOF
 - Other tasks started by the same director may be running in this workspace. Do not coordinate with them yourself; tell the director what they need to know (through notify_director while they may still need it, otherwise in your final message).
-- Work only in the assigned CWD. The director owns worktree creation and cleanup. APFS clones have independent files but may retain symlinks or absolute paths into another checkout: check those before builds, keep outputs local, and never replace isolation with hard links or shared writable dependencies. Do not copy a worktree's .git file or delete another task's directory. Submodules have independent Git state at the parent's pinned commits; commit submodule edits before updating the parent gitlink, and report any submodule commits that must be preserved before cleanup. Report the branch, commit and any remaining files the director must preserve when you finish.
+- Work only in ${workspace_scope}. The director owns worktree creation and cleanup. APFS clones have independent files but may retain symlinks or absolute paths into another checkout: check those before builds, keep outputs local, and never replace isolation with hard links or shared writable dependencies. Do not copy a worktree's .git file or delete another task's directory. Submodules have independent Git state at the parent's pinned commits; commit submodule edits before updating the parent gitlink, and report any submodule commits that must be preserved before cleanup. Report the branch, commit and any remaining files the director must preserve when you finish.
 EOF
   executor_skill_note
   cat <<EOF
@@ -273,6 +277,29 @@ do_launch() {
       investigate:agy|investigate:antigravity|implement:agy|implement:antigravity) ;;
       *) echo "CODEX_FAILED: SWARM is only supported for new investigate or implement tasks on EXECUTOR: agy (antigravity)"; exit 1 ;;
     esac
+  fi
+  if [ -n "$WORKSPACE_ROOTS" ]; then
+    case "$MODE" in
+      investigate|implement|continue|fork) ;;
+      *) echo "CODEX_FAILED: WORKSPACE_ROOTS is only supported for task modes (investigate, implement, continue, fork)"; exit 1 ;;
+    esac
+    if { [ "$RESUME_ORIGINAL" = 0 ] && [ "$EXECUTOR" != codex ]; } || { [ "$RESUME_ORIGINAL" = 1 ] && [ -n "$EXECUTOR" ] && [ "$EXECUTOR" != codex ]; }; then
+      echo "CODEX_FAILED: WORKSPACE_ROOTS is only supported for Codex tasks"; exit 1
+    fi
+    if ! grep -q '"workspace-root"' "$CC"; then
+      echo "CODEX_FAILED: the installed plugin has no --workspace-root support; update it or point CODEX_COMPANION at an updated checkout"; exit 1
+    fi
+    if ! python3 - "$WORKSPACE_ROOTS" > "$WORK/workspace-roots" 2> /dev/null <<'PY'
+import json, sys
+roots = json.loads(sys.argv[1])
+if not isinstance(roots, list) or not roots or not all(isinstance(r, str) and r.strip() for r in roots):
+    raise ValueError("must be a non-empty JSON array of nonempty path strings")
+for r in roots:
+    sys.stdout.write(r.strip() + "\0")
+PY
+    then
+      echo "CODEX_FAILED: invalid WORKSPACE_ROOTS (expected a non-empty JSON array of path strings)"; exit 1
+    fi
   fi
 
   local CMD=() FOCUS CAND
@@ -508,6 +535,13 @@ do_launch() {
     fi
   fi
 
+  if [ -f "$WORK/workspace-roots" ]; then
+    local root
+    while IFS= read -r -d '' root; do
+      CMD+=(--workspace-root "$root")
+    done < "$WORK/workspace-roots"
+  fi
+
   if grep -q '"label"' "$CC"; then
     CMD+=(--label "$NAME")
   else
@@ -729,6 +763,46 @@ try {
 NODE
 }
 
+do_compact() {
+  local CC cwd="$PWD" thread="" args=()
+  while [ "$#" -gt 0 ]; do
+    case "$1" in
+      --cwd) [ "$#" -ge 2 ] || { echo "COMPACT_FAILED usage: --cwd <repo>"; return 1; }; cwd="$2"; shift 2 ;;
+      --thread) [ "$#" -ge 2 ] || { echo "COMPACT_FAILED usage: --thread <thread-id>"; return 1; }; thread="$2"; shift 2 ;;
+      -*) echo "COMPACT_FAILED unknown option '$1' (usage: dispatch.sh compact (<job-id> | --thread <thread-id>) [--cwd <repo>])"; return 1 ;;
+      *) args+=("$1"); shift ;;
+    esac
+  done
+  local job="${args[0]:-}"
+  if { [ -n "$job" ] && [ -n "$thread" ]; } || { [ -z "$job" ] && [ -z "$thread" ]; } || [ "${#args[@]}" -gt 1 ]; then
+    echo "COMPACT_FAILED usage: dispatch.sh compact (<job-id> | --thread <thread-id>) [--cwd <repo>]"; return 1
+  fi
+  CC=$(select_companion)
+  if [ -z "$CC" ] || ! grep -q 'case "compact":' "$CC" 2>/dev/null; then
+    echo "COMPACT_UNSUPPORTED: the installed plugin has no compact subcommand; install a plugin version that has it"
+    return 2
+  fi
+  node - "$CC" "$cwd" "$job" "$thread" <<'NODE'
+const { execFileSync } = require("node:child_process");
+const [cc, cwd, job, thread] = process.argv.slice(2);
+const target = job ? [job] : ["--thread", thread];
+const label = job ? `job=${job}` : `thread=${thread}`;
+try {
+  const raw = execFileSync(process.execPath, [cc, "compact", ...target, "--cwd", cwd, "--json"],
+    { encoding: "utf8", stdio: ["ignore", "pipe", "pipe"], maxBuffer: 64 * 1024 * 1024 });
+  const parsed = JSON.parse(raw);
+  const parts = ["COMPACTED"];
+  if (parsed.jobId) parts.push(`job=${parsed.jobId}`);
+  if (parsed.threadId) parts.push(`thread=${parsed.threadId}`);
+  console.log(parts.join(" "));
+} catch (error) {
+  const detail = String(error.stderr || error.message).trim().split(/\r?\n/)[0];
+  console.log(`COMPACT_FAILED ${label} ${detail}`);
+  process.exit(1);
+}
+NODE
+}
+
 case "${1:-}" in
   dispatch)  do_dispatch "${2:-}" ;;
   launch)    [ "$#" -ge 2 ] || { echo "usage: dispatch.sh launch <input-file>"; exit 1; }; do_launch "$2" ;;
@@ -742,6 +816,7 @@ case "${1:-}" in
   follow)    shift; do_follow "$@" ;;
   message)   shift; do_message "$@" ;;
   answer)    shift; do_answer "$@" ;;
+  compact)   shift; do_compact "$@" ;;
   pane)      shift; CC=$(select_companion) || exit 1; node "$CC" pane "$@" ;;
-  *) echo "usage: dispatch.sh dispatch [input-file] | launch <input-file> | collect <WORK> | companion | worktree <source-repo> <new-directory> <new-branch> | events --cwd <repo> | follow <job-id> --cwd <repo> [--after <cursor>] | message <job-id> <prompt-file> [--cwd <repo>] [--interrupt] | answer <job-id> <request-id> <answers-file> [--cwd <repo>] | pane [list|refresh|forget <n|name|task id>]"; exit 1 ;;
+  *) echo "usage: dispatch.sh dispatch [input-file] | launch <input-file> | collect <WORK> | companion | worktree <source-repo> <new-directory> <new-branch> | events --cwd <repo> | follow <job-id> --cwd <repo> [--after <cursor>] | message <job-id> <prompt-file> [--cwd <repo>] [--interrupt] | answer <job-id> <request-id> <answers-file> [--cwd <repo>] | compact (<job-id> | --thread <thread-id>) [--cwd <repo>] | pane [list|refresh|forget <n|name|task id>]"; exit 1 ;;
 esac

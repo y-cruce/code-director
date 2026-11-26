@@ -31,7 +31,7 @@ Dispatch with `mcp__codex__dispatch`; several dispatches go in one message as se
 Fill `mode`, `name`, `cwd` and `brief` every time (`continue` and `fork` may leave out `cwd`), and other fields only when a rule below calls for them:
 
 - `name`: three to eight words saying what the task does, distinguishable from the other tasks (`worker answer subcommand`, `root cause of brand fallback`). It labels the job in the pane, status and events, so never use a job id, a mode name or "task".
-- `cwd`: the repository or worktree Codex runs in.
+- `cwd`: the repository or worktree Codex runs in. For cross-repo Codex tasks that need extra workspace roots beyond `cwd`, use the Bash dispatch header `WORKSPACE_ROOTS: ["/abs/other-repo"]` (Codex task modes only; see `references/cli.md`).
 - `siblings`: when other tasks you started are still running, one line naming each by job id and a few words. Codex sees it only on `investigate` and `implement`.
 - `sandbox`: leave it out. Every task runs with full access (the user's standing policy), so read-only intent lives in the brief: write "只读，不改文件" into investigation briefs. Reviews may build, run tests and write scratch files to verify findings, so a review brief does not say read-only. Only when the user asks to narrow a task, set `network` (workspace-write plus network) or `default` (the plugin's own read-only or workspace-write choice).
 
@@ -83,6 +83,7 @@ Rules for `continue` and `fork`:
 - Both `continue` and `fork` run in the source thread's `cwd`. For a thread this session dispatched, the tool takes it from the session's record and ignores the `cwd` you pass; for another session's thread, pass its original `cwd`. The job tools (`message`, `answer`, `result`, `status`, `cancel`) look up a job's `cwd` the same way. To write in a worktree, name the worktree's absolute path in the brief.
 - A `continue` brief says what changed since last time and what to do next; a `fork` brief states the new branch's goal and scope directly without repeating background already in the source thread.
 - `continue` starts a new turn once the current job has finished. While a job runs, use the controls in "Steering a running job".
+- When a long idle Codex thread has accumulated heavy context before its next `continue` round, compact it manually with `bash ~/.claude/skills/code-director/scripts/dispatch.sh compact <job-id> --cwd <repo>` (or `--thread <thread-id>`; Codex-only, idle threads only).
 - If you dispatched a fresh task for a problem that already had a thread, cancel it and `continue` the original, telling it about any branch or worktree the cancelled task created so it reuses or removes them.
 
 ### Reviews

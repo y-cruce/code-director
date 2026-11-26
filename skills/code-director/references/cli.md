@@ -12,8 +12,9 @@ Read this when the `mcp__codex__*` tools are missing from the session, in an SDK
 | `result` | `node "$CC" result <job-id> --cwd <repo>` |
 | `status` | `node "$CC" status <job-id> --cwd <repo> --brief` |
 | `cancel` | `node "$CC" cancel <job-id> --cwd <repo>` |
+| `compact` (idle Codex thread) | `bash $D compact (<job-id> \| --thread <thread-id>) [--cwd <repo>]` |
 
-The dispatch file has header lines, a blank line, then the brief. Each tool field is a header in upper case: `MODE` (`investigate`, `implement`, `continue`, `fork`, `review`, `adversarial-review`), `NAME`, `CWD` (defaults to your working directory; must match the thread's `cwd` on `continue` and `fork`), `THREAD` (required for `continue` and `fork`; names the source thread on `fork`), `BASE`, `WRITE: yes`, `EFFORT`, `MODEL`, `SIBLINGS`, `SANDBOX`, `EXECUTOR`, `EXECUTOR_MODE`, `EXECUTOR_EFFORT`, `EXECUTOR_COMMAND`, `EXECUTOR_ARGS` (a JSON array), `EXECUTOR_PERMISSIONS`. On `MODE: fork`, `dispatch` prints `THREAD: <new-thread>` and `FORKED_FROM: <source-thread>`; later rounds on the forked branch use `MODE: continue` with that new `THREAD:`.
+The dispatch file has header lines, a blank line, then the brief. Each tool field is a header in upper case: `MODE` (`investigate`, `implement`, `continue`, `fork`, `review`, `adversarial-review`), `NAME`, `CWD` (defaults to your working directory; must match the thread's `cwd` on `continue` and `fork`), `WORKSPACE_ROOTS` (a JSON array of extra workspace root paths for cross-repo Codex task modes, forwarded as repeatable `--workspace-root`), `THREAD` (required for `continue` and `fork`; names the source thread on `fork`), `BASE`, `WRITE: yes`, `EFFORT`, `MODEL`, `SIBLINGS`, `SANDBOX`, `EXECUTOR`, `EXECUTOR_MODE`, `EXECUTOR_EFFORT`, `EXECUTOR_COMMAND`, `EXECUTOR_ARGS` (a JSON array), `EXECUTOR_PERMISSIONS`. On `MODE: fork`, `dispatch` prints `THREAD: <new-thread>` and `FORKED_FROM: <source-thread>`; later rounds on the forked branch use `MODE: continue` with that new `THREAD:`.
 
 ```
 MODE: investigate
@@ -23,7 +24,7 @@ CWD: /abs/path/to/repo
 <brief>
 ```
 
-The brief goes through a file so it never passes through a shell command line. Run `answer` alone, never through a pipe or `grep`: a pipe hides the `ANSWER_FAILED` line and replaces the exit code. `message` prints `MESSAGED job=<id>` (plus `queued=<id>` with `--queue`, naming the job the queued turn runs as) or `MESSAGE_FAILED job=<id> <reason>`.
+The brief goes through a file so it never passes through a shell command line. Run `answer` alone, never through a pipe or `grep`: a pipe hides the `ANSWER_FAILED` line and replaces the exit code. `message` prints `MESSAGED job=<id>` (plus `queued=<id>` with `--queue`, naming the job the queued turn runs as) or `MESSAGE_FAILED job=<id> <reason>`. `compact` runs on idle Codex threads only and prints `COMPACTED [job=<id>] thread=<thread>` or `COMPACT_FAILED ...` (`COMPACT_UNSUPPORTED:` with exit 2 on older plugins).
 
 `message` with no flag steers the running turn for Codex, Qoder, and DSH/agy with the steering extensions when `midTurnSteer: true`. Do not add `--queue` merely because an executor uses ACP. Add `--queue` when the instruction is meant for the next turn, or `--interrupt` when the current turn must stop now. If steering is unsupported or the turn ended, check status before choosing the next action; a finished job needs `continue`.
 
