@@ -29,7 +29,7 @@
 # SIBLINGS, CWD, SANDBOX (full = no sandbox, the default for every task; network = workspace-write plus network
 # access; default = the plugin's own read-only / workspace-write choice),
 # EXECUTOR (codex | qoder | dsh | antigravity | agy | cca | acp) with EXECUTOR_COMMAND, EXECUTOR_ARGS (JSON array), EXECUTOR_MODE, EXECUTOR_PERMISSIONS, EXECUTOR_EFFORT and MODEL for a
-# non-Codex agent; task-class modes only. Without the header the default is $CODEX_DIRECTOR_EXECUTOR, else codex,
+# non-Codex agent; task-class modes only. SWARM (yes) runs an agy /swarm coordinator for new investigate or implement tasks on antigravity/agy only. Without the header the default is $CODEX_DIRECTOR_EXECUTOR, else codex,
 # and qoder runs in its `yolo` permission mode unless EXECUTOR_MODE or $CODEX_DIRECTOR_EXECUTOR_MODE says otherwise.
 set -uo pipefail
 
@@ -55,13 +55,13 @@ select_companion() {
 # Reads $1 (the input file). Sets the header variables and writes the body to $WORK/brief.md.
 parse_input() {
   local line key val in_header=1
-  NAME=""; MODE=""; EFFORT=""; MODEL=""; BASE=""; WRITE=""; THREAD=""; SIBLINGS=""; CWD=""; SANDBOX=""; EXECUTOR=""; EXECUTOR_MODE=""; EXECUTOR_PERMISSIONS=""; EXECUTOR_EFFORT=""; EXECUTOR_COMMAND=""; EXECUTOR_ARGS=""
+  NAME=""; MODE=""; EFFORT=""; MODEL=""; BASE=""; WRITE=""; THREAD=""; SIBLINGS=""; CWD=""; SANDBOX=""; EXECUTOR=""; EXECUTOR_MODE=""; EXECUTOR_PERMISSIONS=""; EXECUTOR_EFFORT=""; EXECUTOR_COMMAND=""; EXECUTOR_ARGS=""; SWARM=""
   : > "$WORK/brief.md"
   while IFS= read -r line || [ -n "$line" ]; do
     if [ "$in_header" = 1 ]; then
       if [ -z "$line" ]; then in_header=0; continue; fi
       case "$line" in
-        NAME:*|MODE:*|EFFORT:*|MODEL:*|BASE:*|WRITE:*|THREAD:*|SIBLINGS:*|CWD:*|SANDBOX:*|EXECUTOR:*|EXECUTOR_MODE:*|EXECUTOR_PERMISSIONS:*|EXECUTOR_EFFORT:*|EXECUTOR_COMMAND:*|EXECUTOR_ARGS:*)
+        NAME:*|MODE:*|EFFORT:*|MODEL:*|BASE:*|WRITE:*|THREAD:*|SIBLINGS:*|CWD:*|SANDBOX:*|EXECUTOR:*|EXECUTOR_MODE:*|EXECUTOR_PERMISSIONS:*|EXECUTOR_EFFORT:*|EXECUTOR_COMMAND:*|EXECUTOR_ARGS:*|SWARM:*)
           key=${line%%:*}; val=${line#*:}; val=${val#"${val%%[![:space:]]*}"}
           printf -v "$key" '%s' "$val" ;;
         *) in_header=0; printf '%s\n' "$line" >> "$WORK/brief.md" ;;
@@ -73,46 +73,7 @@ parse_input() {
   CWD="${CWD:-$PWD}"
 }
 
-# The note prepended to investigate/implement briefs so Codex knows who started it.
-director_note() {
-  cat <<'EOF'
-## Who you are working with
-You were started by an automated director agent (Claude Code), not by a human. The director wrote the brief below and reads your final message; no human is watching this thread.
-EOF
-  # request_user_input and notify_director are Codex tools; another executor has
-  # neither, and naming them would send it looking for tools it does not have.
-  if [ -z "$EXECUTOR" ] || [ "$EXECUTOR" = codex ]; then
-    cat <<'EOF'
-- When you need a decision, missing information, or authorization, call request_user_input. The director answers it from the question alone, without your trace: write the question as a short paragraph with where you are, what you found (file:line), why it blocks you, and what you will do meanwhile, and give each option its consequence, recommended first. The tool's "single sentence" hint does not apply here.
-EOF
-  elif [ "$EXECUTOR" = dsh ]; then
-    if grep -q 'ask-director' "$CC"; then
-      cat <<'EOF'
-- For a director question, run node "$CODEX_ACP_COMPANION_PATH" ask-director --question "question" --options '["First option","Second option"]' to wait for the director. Set bash timeoutMs:600000 (default 120000 ms, usual cap 600000 ms). If promoted to a background job, collect that same job with job_output. The answer is printed to stdout; cancellation or the 10-minute deadline exits nonzero. A shell without job promotion may kill it first: report that and check the pending question, never infer an answer or retry it.
-EOF
-    else
-      cat <<'EOF'
-- This dsh profile has no question tool. When a decision or missing fact blocks the task, put the question, evidence and options in your final reply and stop. The director answers by continuing this thread.
-EOF
-    fi
-  else
-    cat <<'EOF'
-- When you need a decision, missing information, or authorization, ask for it however this agent asks the user. The director answers it from the question alone, without your trace: say where you are, what you found (file:line), why it blocks you, the options with their consequences (recommended first), and what you will do meanwhile.
-EOF
-  fi
-  if { [ -z "$EXECUTOR" ] || [ "$EXECUTOR" = codex ]; } && grep -rq 'notify_director' "$(dirname "$CC")"; then
-    cat <<'EOF'
-- notify_director(message) sends a one-line note to the director without stopping your work. Use it only when the director must act while you keep working (a blocker it has to clear, a decision or scope change it must approve, a finding that makes the brief wrong), or when another running task needs something you learned and the director has to relay it. Never send progress, finished steps, or findings that only feed your final answer; the director runs many tasks and every note costs its context. The director does not reply through this tool.
-EOF
-  elif [ "$EXECUTOR" != codex ] && grep -q 'notify-director' "$CC"; then
-    cat <<'EOF'
-- To notify the director while continuing work, run: node "$CODEX_ACP_COMPANION_PATH" notify-director "message". Use this only for a blocker or decision the director must act on now, or a finding another running task needs. Do not send progress or findings that belong in your final reply. Messages must be nonempty and at most 400 characters. This command does not return a director answer.
-EOF
-  fi
-  cat <<EOF
-- Other tasks started by the same director may be running in this workspace. Do not coordinate with them yourself; tell the director what they need to know (through notify_director while they may still need it, otherwise in your final message).
-- Work only in the assigned CWD. The director owns worktree creation and cleanup. APFS clones have independent files but may retain symlinks or absolute paths into another checkout: check those before builds, keep outputs local, and never replace isolation with hard links or shared writable dependencies. Do not copy a worktree's .git file or delete another task's directory. Submodules have independent Git state at the parent's pinned commits; commit submodule edits before updating the parent gitlink, and report any submodule commits that must be preserved before cleanup. Report the branch, commit and any remaining files the director must preserve when you finish.
-EOF
+executor_skill_note() {
   cat <<'EOF'
 
 ## Executor skill
@@ -157,12 +118,101 @@ if start:
     if memory:
         print("Memory index (for `rules --memory`, read-only): `" + str(memory) + "`.")
 PY
+}
+
+# The note prepended to investigate/implement briefs so Codex knows who started it.
+director_note() {
+  cat <<'EOF'
+## Who you are working with
+You were started by an automated director agent (Claude Code), not by a human. The director wrote the brief below and reads your final message; no human is watching this thread.
+EOF
+  # request_user_input and notify_director are Codex tools; another executor has
+  # neither, and naming them would send it looking for tools it does not have.
+  if [ -z "$EXECUTOR" ] || [ "$EXECUTOR" = codex ]; then
+    cat <<'EOF'
+- When you need a decision, missing information, or authorization, call request_user_input. The director answers it from the question alone, without your trace: write the question as a short paragraph with where you are, what you found (file:line), why it blocks you, and what you will do meanwhile, and give each option its consequence, recommended first. The tool's "single sentence" hint does not apply here.
+EOF
+  elif [ "$EXECUTOR" = dsh ]; then
+    if grep -q 'ask-director' "$CC"; then
+      cat <<'EOF'
+- For a director question, run node "$CODEX_ACP_COMPANION_PATH" ask-director --question "question" --options '["First option","Second option"]' to wait for the director. Set bash timeoutMs:600000 (default 120000 ms, usual cap 600000 ms). If promoted to a background job, collect that same job with job_output. The answer is printed to stdout; cancellation or the 10-minute deadline exits nonzero. A shell without job promotion may kill it first: report that and check the pending question, never infer an answer or retry it.
+EOF
+    else
+      cat <<'EOF'
+- This dsh profile has no question tool. When a decision or missing fact blocks the task, put the question, evidence and options in your final reply and stop. The director answers by continuing this thread.
+EOF
+    fi
+  else
+    cat <<'EOF'
+- When you need a decision, missing information, or authorization, ask for it however this agent asks the user. The director answers it from the question alone, without your trace: say where you are, what you found (file:line), why it blocks you, the options with their consequences (recommended first), and what you will do meanwhile.
+EOF
+  fi
+  if { [ -z "$EXECUTOR" ] || [ "$EXECUTOR" = codex ]; } && grep -rq 'notify_director' "$(dirname "$CC")"; then
+    cat <<'EOF'
+- notify_director(message) sends a one-line note to the director without stopping your work. Use it only when the director must act while you keep working (a blocker it has to clear, a decision or scope change it must approve, a finding that makes the brief wrong), or when another running task needs something you learned and the director has to relay it. Never send progress, finished steps, or findings that only feed your final answer; the director runs many tasks and every note costs its context. The director does not reply through this tool.
+EOF
+  elif [ "$EXECUTOR" != codex ] && grep -q 'notify-director' "$CC"; then
+    cat <<'EOF'
+- To notify the director while continuing work, run: node "$CODEX_ACP_COMPANION_PATH" notify-director "message". Use this only for a blocker or decision the director must act on now, or a finding another running task needs. Do not send progress or findings that belong in your final reply. Messages must be nonempty and at most 400 characters. This command does not return a director answer.
+EOF
+  fi
+  cat <<EOF
+- Other tasks started by the same director may be running in this workspace. Do not coordinate with them yourself; tell the director what they need to know (through notify_director while they may still need it, otherwise in your final message).
+- Work only in the assigned CWD. The director owns worktree creation and cleanup. APFS clones have independent files but may retain symlinks or absolute paths into another checkout: check those before builds, keep outputs local, and never replace isolation with hard links or shared writable dependencies. Do not copy a worktree's .git file or delete another task's directory. Submodules have independent Git state at the parent's pinned commits; commit submodule edits before updating the parent gitlink, and report any submodule commits that must be preserved before cleanup. Report the branch, commit and any remaining files the director must preserve when you finish.
+EOF
+  executor_skill_note
   cat <<EOF
 
 Other tasks currently running: ${SIBLINGS:-none known}
 
 ---- Brief ----
 EOF
+}
+
+# Trailing note for agy /swarm runs: /swarm must stay at byte 0 of the prompt so
+# agy expands the native swarm skill instead of falling back to ad-hoc tool calls.
+swarm_director_note() {
+  cat <<EOF
+
+---- Director note ----
+## Who you are working with
+You were started by an automated director agent (Claude Code), not by a human. This task explicitly uses /swarm mode: act as the swarm coordinator, split the work across workers and verifiers, and serve as the single interface back to the director (this overrides the "do not delegate further" clause in codex-executor; follow its remaining rules for evidence, shared context, and delivery).
+- When you need a decision, missing information, or authorization, consolidate it at the coordinator and ask through this agent's native question tool (do not let workers ask the user directly). Include where you are, what you found (file:line), why it blocks you, the options with their consequences (recommended first), and what you will do meanwhile.
+EOF
+  if grep -q 'notify-director' "$CC"; then
+    cat <<'EOF'
+- To notify the director while continuing work, run: node "$CODEX_ACP_COMPANION_PATH" notify-director "message". Use this for: (1) a blocker or decision the director must act on now, or a finding another running task needs; (2) explicit milestones requested in the brief, or a major swarm event the director should know (such as a worker switching models on quota exhaustion, or a fix/verify loop failing to converge after 2 rounds). Do not send routine step-by-step progress or per-post board chatter. Messages must be nonempty and at most 400 characters.
+EOF
+  fi
+  cat <<EOF
+- Headless ACP swarm rules:
+  - Do not add a narrator (no Swarm UI pane exists here; save the quota). Keep a monitor to catch stalls.
+  - Primary working directory is \`${CWD}\`. Workers inherit multiple workspace roots and do not see your appended system prompt, so include the absolute path \`${CWD}\` in every worker brief and tell workers to work in that directory.
+  - Always use the default \`workspace: "inherit"\` when adding workers (multi-root ACP sessions include non-Git skill directories, which makes \`workspace: "share"\` and \`"branch"\` fail). Isolate parallel writers by giving each worker disjoint files or directories, and have a verifier run the acceptance checks in \`${CWD}\` before finishing. Do not push to a remote unless the brief explicitly authorizes it.
+  - Other tasks started by the same director may be running in this workspace; do not coordinate with them yourself or delete directories outside \`${CWD}\`.
+  - Before your final reply, post \`[done] <summary>\` on the board so the monitor goes dormant. Omit \`open_board\` links, and end your final reply with the delivery evidence required by codex-executor.
+EOF
+  executor_skill_note
+  cat <<EOF
+
+Other tasks currently running: ${SIBLINGS:-none known}
+EOF
+}
+
+write_task_prompt() {
+  if [ "$SWARM" = yes ]; then
+    python3 - "$WORK/brief.md" <<'PY' > "$WORK/prompt.md"
+import re, sys
+text = open(sys.argv[1], encoding="utf-8", errors="replace").read()
+body = re.sub(r"^\s*/swarm(?:\s+|$)", "", text, count=1)
+sys.stdout.write("/swarm " + body)
+if not body.endswith("\n"):
+    sys.stdout.write("\n")
+PY
+    swarm_director_note >> "$WORK/prompt.md"
+  else
+    { director_note; cat "$WORK/brief.md"; } > "$WORK/prompt.md"
+  fi
 }
 
 do_launch() {
@@ -213,13 +263,25 @@ do_launch() {
     EXECUTOR="${EXECUTOR:-${CODEX_DIRECTOR_EXECUTOR:-codex}}"
   fi
 
+  case "$SWARM" in
+    ""|no|false) SWARM="" ;;
+    yes|true) SWARM=yes ;;
+    *) echo "CODEX_FAILED: SWARM must be 'yes' or 'no', got '$SWARM'"; exit 1 ;;
+  esac
+  if [ "$SWARM" = yes ]; then
+    case "$MODE:$EXECUTOR" in
+      investigate:agy|investigate:antigravity|implement:agy|implement:antigravity) ;;
+      *) echo "CODEX_FAILED: SWARM is only supported for new investigate or implement tasks on EXECUTOR: agy (antigravity)"; exit 1 ;;
+    esac
+  fi
+
   local CMD=() FOCUS CAND
   case "$MODE" in
     investigate)
-      { director_note; cat "$WORK/brief.md"; } > "$WORK/prompt.md"
+      write_task_prompt
       CMD=(node "$CC" task --cwd "$CWD" --prompt-file "$WORK/prompt.md" ${EFFORT:+--effort "$EFFORT"}) ;;
     implement)
-      { director_note; cat "$WORK/brief.md"; } > "$WORK/prompt.md"
+      write_task_prompt
       CMD=(node "$CC" task --cwd "$CWD" --prompt-file "$WORK/prompt.md" ${EFFORT:+--effort "$EFFORT"} --write) ;;
     continue)
       cp "$WORK/brief.md" "$WORK/prompt.md"

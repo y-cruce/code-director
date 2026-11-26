@@ -237,3 +237,59 @@ else { fs.writeFileSync(process.env.RECORDING, JSON.stringify(process.argv.slice
     assert.match(forkRejected.stdout, pattern);
   }
 });
+
+test("SWARM header puts /swarm at byte 0 for agy new tasks and rejects unsupported combinations", (t) => {
+  const cwd = fs.mkdtempSync(path.join(os.tmpdir(), "agy-swarm-dispatch-test-"));
+  t.after(() => fs.rmSync(cwd, { recursive: true, force: true }));
+  const companion = path.join(cwd, "companion.mjs");
+  const recording = path.join(cwd, "args.json");
+  fs.writeFileSync(companion, `import fs from "node:fs";
+// Capability markers: executor-command executor-preset notify-director "executor-permissions" "label" "thread" "fork-thread" danger-full-access case "message":
+if (process.argv[2] === "status") {
+  console.log(JSON.stringify({ job: { id: "task-swarm", status: "running", threadId: "swarm-session" } }));
+} else {
+  fs.writeFileSync(process.env.RECORDING, JSON.stringify(process.argv.slice(2)));
+  console.log(JSON.stringify({ jobId: "task-swarm" }));
+}
+`);
+  const env = { ...process.env, HOME: cwd, TMPDIR: cwd, CLAUDE_CONFIG_DIR: cwd,
+    CODEX_COMPANION: companion, RECORDING: recording, CODEX_DIRECTOR_ANTIGRAVITY_COMMAND: "/custom/agy" };
+  delete env.CODEX_COMPANION_TRANSCRIPT_PATH;
+  delete env.CODEX_COMPANION_SESSION_ID;
+
+  for (const [mode, executor, body] of [
+    ["implement", "agy", "Split the refactor across modules.\n"],
+    ["investigate", "antigravity", "/swarm Audit three packages in parallel.\n"],
+  ]) {
+    const res = spawnSync("bash", [SCRIPT, "dispatch"], {
+      cwd, env, encoding: "utf8",
+      input: `MODE: ${mode}\nNAME: swarm check\nCWD: ${cwd}\nEXECUTOR: ${executor}\nSWARM: yes\nSIBLINGS: task-1 other work\n\n${body}`
+    });
+    assert.equal(res.status, 0, res.stdout + res.stderr);
+    const args = JSON.parse(fs.readFileSync(recording, "utf8"));
+    const prompt = fs.readFileSync(args[args.indexOf("--prompt-file") + 1], "utf8");
+    assert.ok(prompt.startsWith("/swarm "), `prompt must start with /swarm : ${prompt.slice(0, 40)}`);
+    assert.doesNotMatch(prompt, /^\/swarm\s+\/swarm\b/, "must not double-prefix /swarm");
+    assert.match(prompt, /\n---- Director note ----\n/);
+    assert.match(prompt, /Do not add a narrator/);
+    assert.match(prompt, /workspace: "inherit"/);
+    assert.ok(prompt.includes(`Primary working directory is \`${cwd}\``));
+    assert.match(prompt, /notify-director/);
+    assert.match(prompt, /explicit milestones requested in the brief/);
+    assert.match(prompt, /Other tasks currently running: task-1 other work/);
+  }
+
+  for (const [label, extra, pattern] of [
+    ["codex executor", "MODE: implement\nEXECUTOR: codex\nSWARM: yes\n", /SWARM is only supported/],
+    ["continue mode", "MODE: continue\nTHREAD: swarm-session\nEXECUTOR: agy\nSWARM: yes\n", /SWARM is only supported/],
+    ["review mode", "MODE: review\nEXECUTOR: agy\nSWARM: yes\n", /SWARM is only supported/],
+    ["invalid value", "MODE: implement\nEXECUTOR: agy\nSWARM: maybe\n", /SWARM must be 'yes' or 'no'/],
+  ]) {
+    const res = spawnSync("bash", [SCRIPT, "dispatch"], {
+      cwd, env, encoding: "utf8",
+      input: `NAME: reject ${label}\nCWD: ${cwd}\n${extra}\nTask body.\n`
+    });
+    assert.notEqual(res.status, 0, label);
+    assert.match(res.stdout, pattern, label);
+  }
+});

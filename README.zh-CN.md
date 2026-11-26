@@ -162,7 +162,7 @@ NAME: worker 回答子命令
 | `codex`（环境未配置时的默认） | 走插件 app-server 的 Codex | — |
 | `qoder` | 走 ACP 的 qodercli；二进制按 PATH、`~/.qoder/entry/qoder`、`CODEX_DIRECTOR_QODER_COMMAND` 的顺序找 | `EXECUTOR_MODE`（Qoder 的会话模式，例如 `yolo`） |
 | `dsh` | 走 ACP 的 DeepSeek Harness；依次查找 `EXECUTOR_COMMAND`、`CODEX_DIRECTOR_DSH_COMMAND`、PATH 上的 `dsh`；默认参数取 `CODEX_DIRECTOR_DSH_ARGS`，未设时装了 `acp-fork` profile 就用它 | `EXECUTOR_ARGS`、`EXECUTOR_MODE`（社区 profile 的 `default`/`plan`）、`EXECUTOR_PERMISSIONS`（默认 `allow-once`，可改为 `ask`） |
-| `antigravity`（别名 `agy`） | CLI 自带的 `agy acp`；优先 `~/.local/bin/agy`，其次 PATH；用 `EXECUTOR_COMMAND` 或 `CODEX_DIRECTOR_ANTIGRAVITY_COMMAND` 覆盖 | `EXECUTOR_ARGS`、`EXECUTOR_MODE`、`EXECUTOR_PERMISSIONS`（默认 `allow-once`，可改为 `ask`） |
+| `antigravity`（别名 `agy`） | CLI 自带的 `agy acp`；优先 `~/.local/bin/agy`，其次 PATH；用 `EXECUTOR_COMMAND` 或 `CODEX_DIRECTOR_ANTIGRAVITY_COMMAND` 覆盖 | `EXECUTOR_ARGS`、`EXECUTOR_MODE`、`EXECUTOR_PERMISSIONS`（默认 `allow-once`，可改为 `ask`）、`SWARM`（新建 `investigate`/`implement` 时传 `yes`） |
 | `cca` | 走 ACP 的 Claude Code（`claude-agent-acp`）；依次查找 `EXECUTOR_COMMAND`、`~/.local/bin/cc-acp`、PATH 上的 `claude-agent-acp` | `EXECUTOR_ARGS`（默认 `[]`）、`EXECUTOR_MODE`（默认 `bypassPermissions`）、`EXECUTOR_PERMISSIONS`（默认 `allow-once`，可改为 `ask`）、`MODEL`、`EXECUTOR_EFFORT` |
 | `acp` | 任何在 stdio 上说 Agent Client Protocol 的 agent | `EXECUTOR_COMMAND`（必填）、`EXECUTOR_ARGS`（JSON 数组）、`EXECUTOR_MODE` |
 
@@ -177,6 +177,8 @@ CLI 原生读取 `~/.gemini/config/mcp_config.json`，包括 `serverUrl` HTTP �
 agy 本轮活跃时可以 steer，包括命令运行期间。若 agy 在命令未完成时提前返回 `end_turn`，驱动会等待原生工具状态，命令结束后在同一 job 自动接续。等待期间拒绝 steer，可用 queue 留到下一轮，或用 interrupt 立即纠偏。后台命令在 interrupt 后继续运行，需要停止时请在新指令里写明。多次等待共用 30 分钟上限，超时会列出剩余命令。原生 `IsDaemon: true` 常驻进程不纳入等待。详情与回退见插件 `scripts/agy-acp/README.md`。
 
 `agy` 是 `antigravity` 的等价别名，`executor` 字段和 `EXECUTOR` 头部都接受这两种写法，也可交替续接同一会话。技能安装路径是指向本 checkout 的软链接，新开的 Claude Code 会话会读取更新后的技能。旧版插件的工具选项尚无这两个名称时，技能会通过已有的 `executor: "acp"` 调用服务，传入绝对 CLI 路径、`["acp"]` 参数和 `allow-once` 权限；Bash 的两种执行器写法也均可用。
+
+针对需要内部拆块并行和 `author ↔ verifier` 闭环的大型复杂任务，可在派给 `agy`/`antigravity` 的新建 `investigate`/`implement` 任务上显式开启 `swarm: true`（Bash 头部 `SWARM: yes`）。`dispatch.sh` 会把 `/swarm ` 置于 prompt 第 0 字符以确保 `agy acp` 展开原生 swarm 技能，并在末尾附加无头 swarm 约束（不拉 `narrator`、保留 `monitor`、向每个 worker 传入绝对 `CWD`、并行写手使用 `workspace: "inherit"` 并按互不重叠文件/目录分工——多根目录 ACP 会话含非 Git 技能目录不支持 `share`/`branch`、并在 `CWD` 验收后再发 `[done]`）；插件侧同步切分多轮唤醒消息，并在任务面板展示可读的 swarm 工具标题与成员状态。Swarm 为显式按需启用且配额消耗较快；worker 运行期间主 ACP 流无事件推送，`status` 会自动读取本机 swarm 状态补充成员列表、最新板消息和真实活跃时间，超长任务也可在任务书中按需约定关键里程碑通过 `notify-director` 主动推送。
 
 在本 checkout 中给 Antigravity CLI 和 ACP 安装共享执行技能：
 
