@@ -45,7 +45,7 @@ The CLI reads `~/.gemini/config/mcp_config.json` itself, including HTTP `serverU
 
 New and resumed agy sessions include HOME and linked skill directories alongside the existing additional directories. The appended system prompt directs shell commands to the task's cwd. The CLI no longer generates the old workflow skill; the plugin no longer writes its Git exclusion.
 
-agy native form questions always wait for the director, including under allow-once. Ordinary tool permissions still follow allow-once/ask. Without a model override, new sessions follow `~/.gemini/antigravity-cli/settings.json` for both model and effort; an explicitly chosen model defaults to high, Opus to medium (when offered); `continue` does not impose a default effort.
+agy native form questions always wait for the director, including under allow-once. Ordinary tool permissions still follow allow-once/ask. Without a model override, new sessions follow `~/.gemini/antigravity-cli/settings.json` for both model and effort; an explicitly chosen model defaults to high, Opus to medium (when offered); `continue` does not impose a default effort. When using agy for a review (frontend reviews or user-requested agy reviews via `investigate`), pass `model: "claude-opus-5-5"` and `executor_effort: "high"` so the session runs on `claude-opus-5-5-high` (agy ACP's `configOptions` exposes `claude-opus-5-5` plus `thought_level: "high"`, rejecting `claude-opus-5-5-high` as `model`, and defaulting Opus to `medium` without `executor_effort`); inside an agy `swarm: true` brief, specify `claude-opus-5-5-high` directly for review workers.
 
 Install the shared `codex-executor` skill under `~/.gemini/antigravity-cli/skills/codex-executor`; both the CLI and official ACP server read that user skill directory. Link the whole skill directory so its `scripts/context.sh` remains available. Dispatched tasks also receive the skill's absolute source path in the director note.
 
@@ -65,7 +65,7 @@ Antigravity CLI setup and rollback details are in the plugin's `scripts/agy-acp/
 
 **What you lose off Codex:**
 
-- Native `review` and `adversarial-review` modes are refused: they use Codex's own review, which has no ACP equivalent. Frontend reviews still go to agy as `investigate` tasks with a read-only review brief.
+- Native `review` and `adversarial-review` modes are refused: they use Codex's own review, which has no ACP equivalent. Frontend reviews (and user-requested agy reviews) still go to agy as `investigate` tasks with a read-only review brief, using `model: "claude-opus-5-5"` and `executor_effort: "high"` (corresponding to `claude-opus-5-5-high`).
 - Manual context compaction (`dispatch.sh compact`) and extra workspace roots (`WORKSPACE_ROOTS`) are Codex-only.
 - `effort` does not reach the agent. ACP uses `executor_effort` (or `$CODEX_DIRECTOR_EXECUTOR_EFFORT`) with values advertised by the agent.
 - ACP notes use `node "$CODEX_ACP_COMPANION_PATH" notify-director "message"`; they produce the same `director.notified` event as Codex and continue working. agy/Qoder/cca use native questions; dsh uses `ask-director`. Question and permission requests expire after ten minutes and interrupt the active turn. Only Monitor mode sends periodic unanswered-question reminders.
