@@ -256,7 +256,7 @@ bash ~/.claude/skills/code-director/scripts/dispatch.sh worktree /abs/source-rep
 bash ~/.claude/skills/code-director/scripts/dispatch.sh worktree remove /abs/source-repo /abs/worktree
 ```
 
-新版插件在新建前用 `git worktree list --porcelain` 统计该仓已登记的 linked worktree（不含主 checkout），上限按单个仓库各自计算（各仓默认 10 个，子模块仓库单独计算，可通过 `CODEX_WORKTREE_MAX_SLOTS` 调整）；达到上限就拒绝新建且不创建目录或分支，同时逐个列出现有 worktree 的路径、分支以及有没有未提交或未跟踪文件。上限满了先用 `worktree remove` 回收已结束的 worktree 再新建；排不上的写任务等待。
+新版插件在新建前用 `git worktree list --porcelain` 统计该仓已登记的 linked worktree（不含主 checkout），上限按单个仓库各自计算（各仓默认 20 个，子模块仓库单独计算，可通过 `CODEX_WORKTREE_MAX_SLOTS` 调整）；达到上限就拒绝新建且不创建目录或分支，同时逐个列出现有 worktree 的路径、分支以及有没有未提交或未跟踪文件。上限满了先用 `worktree remove` 回收已结束的 worktree 再新建；排不上的写任务等待。
 
 新建时，入口先登记独立的 Git 管理信息并固定源提交，再对未修改的跟踪文件请求写时复制，在 macOS 上通过 Python 3 调用 APFS 原生 `clonefile`；源目录修改过或缺失的文件从固定提交检出。返回的 `clonedFiles`、`copiedFiles`、`checkoutFiles` 分别记录克隆、普通复制和 Git 检出数量，普通复制不代表节省磁盘。未跟踪的依赖、构建产物和会话数据不复制。创建期间保持源目录稳定。旧插件使用 `git worktree add -b worker/topic /abs/new-worktree <base-sha>`。
 

@@ -16,7 +16,7 @@
 #                                          manually compact an idle Codex thread's context; print COMPACTED or COMPACT_FAILED
 #   dispatch.sh companion              print the selected codex-companion.mjs path
 #   dispatch.sh worktree <source-repo> <new-directory> <new-branch>
-#                                          register an independent worktree and clone tracked files where supported (default cap: 10 linked worktrees per repo)
+#                                          register an independent worktree and clone tracked files where supported (default cap: 20 linked worktrees per repo)
 #   dispatch.sh worktree remove <source-repo> <worktree>
 #                                          remove after checking files, unreachable parent commits, and submodule commits
 #   dispatch.sh pane [list|refresh|forget <n|name|task id>]
