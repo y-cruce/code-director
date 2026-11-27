@@ -65,7 +65,7 @@ For qoder, dsh, Antigravity, cca or another ACP agent, read `references/executor
 
 **What executors are told.** For `investigate` and `implement`, dispatch.sh prepends the director note and executor skill entry. For `fork`, dispatch.sh prepends a one-line fork notice naming the source thread and stating that the earlier brief and unfinished steps no longer bind the forked thread; the director note is omitted because it is already in the inherited history. Codex uses `request_user_input` and `notify_director`; ACP sends notes with `node "$CODEX_ACP_COMPANION_PATH" notify-director "message"`. agy, Qoder and cca use native questions; dsh uses the blocking `ask-director` command from the skill. The codex-executor skill sets the final-report format; leave it out of your brief. Tasks never talk to each other: relay relevant findings and list overlapping tasks in `siblings`.
 
-**Parallel writes.** Only one writer works in a checkout at a time, you included. Create a fresh worktree (`worktree <source-repo> <new-directory> <new-branch>`) for each parallel writer before dispatch, pass its `cwd`, keep it while the thread still needs `continue`, and recycle it with `worktree remove` after stopping the task and integrating commits. When the per-repo cap (default 20 linked worktrees, `CODEX_WORKTREE_MAX_SLOTS`) is full, remove finished worktrees first and let extra write tasks wait until one is removed; read `references/worktrees.md` for creation, shared dependency caches, and cleanup.
+**Parallel writes.** Only one writer works in a checkout at a time, you included. Create a fresh worktree (`worktree <source-repo> <new-directory> <new-branch>`) for each parallel writer before dispatch, pass its `cwd`, keep it while the thread still needs `continue`, and recycle it with `worktree remove` after stopping the task and integrating commits. When the per-repo cap (default 30 linked worktrees, `CODEX_WORKTREE_MAX_SLOTS`) is full, remove finished worktrees first and let extra write tasks wait until one is removed; read `references/worktrees.md` for creation, shared dependency caches, and cleanup.
 
 ### Thread continuity
 
@@ -112,6 +112,8 @@ Events wake you by themselves. After 15 minutes without events or progress, chec
 ### Steering a running job
 
 Corrections to running work default to steering in the same job, thread and turn. Use it with Codex, Qoder, agy, cca, and DSH with its steering extension when the plugin reports `midTurnSteer: true`. Do not choose queue just because the executor uses ACP.
+
+Everything that should change the work in progress goes as steer: user corrections or added scope, facts relayed from the user or other sessions, conclusions another task just reached. Merge several into one message. Never queue them: a queued correction waits until the current turn finishes on the outdated brief, and on agy each queued message becomes a separate job. Queue only a step that must start after the current turn ends. If you queued by mistake, cancel the stale queued messages (`mcp__codex__cancel` with `queued: true`, or each ACP `queuedJobId`) and resend them as one steer.
 
 | Intent | Call |
 |---|---|
