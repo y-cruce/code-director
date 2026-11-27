@@ -3,7 +3,7 @@ Append the block below to `~/.codex/AGENTS.md` (applies to all projects) or to a
 ```markdown
 ## Codex main agent delegation
 
-For tasks that warrant delegation (reading code to understand it, debugging, implementation, review), the main agent first loads `~/.codex/skills/codex-director/SKILL.md` and follows it: write the brief, dispatch a complete task, verify the result, make the trade-offs, and finish delivery. Handle simple tasks and human-facing writing directly. A subagent that receives a brief from its parent acts as an executor and spawns further agents only when the parent explicitly assigns more delegation.
+For tasks that warrant delegation (reading code to understand it, debugging, implementation, review), the main agent first loads `~/.codex/skills/codex-director/SKILL.md` and follows it: write the brief, dispatch a complete task, verify the result, make the trade-offs, and finish delivery. Handle simple tasks and human-facing writing directly. A subagent that receives a brief from its parent acts as an executor and does not enter director mode.
 
 Dispatch through native `collaboration.spawn_agent` with `fork_turns: "none"` and a self-contained brief naming the directory, scope, context, and acceptance criteria. Run independent tasks in parallel within the host's concurrency limit; inherit the current model and reasoning settings by default. Give parallel writers isolated worktrees or directories.
 

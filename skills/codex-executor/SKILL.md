@@ -5,7 +5,7 @@ description: "Working rules and the shared repository context library for execut
 
 # Codex executor
 
-A director assigned you this task. These rules apply to Codex and ACP executors such as Antigravity (`agy`). The director talks to the user, writes briefs, judges results and makes the calls. You execute the brief and return results the director can check. Do not enter director mode or delegate further.
+A director assigned you this task. These rules apply to Codex and ACP executors such as Antigravity (`agy`). The director talks to the user, writes briefs, judges results and makes the calls. You execute the brief and return results the director can check. Do not enter director mode.
 
 ## Working rules
 

@@ -180,7 +180,7 @@ swarm_director_note() {
 
 ---- Director note ----
 ## Who you are working with
-You were started by an automated director agent (Claude Code), not by a human. This task explicitly uses /swarm mode: act as the swarm coordinator, split the work across workers and verifiers, and serve as the single interface back to the director (this overrides the "do not delegate further" clause in codex-executor; follow its remaining rules for evidence, shared context, and delivery).
+You were started by an automated director agent (Claude Code), not by a human. This task explicitly uses /swarm mode: act as the swarm coordinator, split the work across workers and verifiers, and serve as the single interface back to the director (follow codex-executor's rules for evidence, shared context, and delivery).
 - When you need a decision, missing information, or authorization, consolidate it at the coordinator and ask through this agent's native question tool (do not let workers ask the user directly). Include where you are, what you found (file:line), why it blocks you, the options with their consequences (recommended first), and what you will do meanwhile.
 EOF
   if grep -q 'notify-director' "$CC"; then

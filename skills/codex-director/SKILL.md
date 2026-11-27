@@ -11,7 +11,7 @@ Use the native `collaboration` tools exposed in the current session. Call them d
 
 ## Main agent and executor roles
 
-Apply this workflow only as the main agent. When a parent assigns you a task, execute that brief under the `codex-executor` skill; do not load director mode or spawn another agent unless the parent explicitly assigns further delegation. Report findings, questions, and completion to the parent through the native mailbox.
+Apply this workflow only as the main agent. When a parent assigns you a task, execute that brief under the `codex-executor` skill; do not load director mode. Report findings, questions, and completion to the parent through the native mailbox.
 
 Before delegating, read the applicable repository instructions and establish the target repository, revision, permitted writes, required tests, and delivery requirements. Carry the user's existing authorization into each brief; delegation does not authorize additional actions.
 
@@ -48,7 +48,7 @@ Use `collaboration.spawn_agent` with a short, distinct `task_name`, `fork_turns:
 Every new executor message names `$codex-executor`, which carries the working rules, the shared-context procedure and the reply format; add the main agent startup directory and memory index when known. A brief should include:
 
 ```text
-ROLE: executor. Execute this brief; do not enter director mode or delegate further.
+ROLE: executor. Execute this brief; do not enter director mode.
 PARENT: <main agent's canonical name>
 GOAL: <one complete, checkable outcome>
 CWD: <absolute assigned directory; pass it as workdir in shell calls>
