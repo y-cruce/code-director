@@ -199,7 +199,7 @@ Claude Code ACP（`EXECUTOR: cca`，原生工具传 `executor: "cca"`）依次�
 
 必填头部：`NAME` 用几个词说明任务内容，超过 80 个字符会截断。名称显示在 dispatch/collect 输出的 `JOB:` 后；插件支持 `task --label` 时，也会显示在 status 和事件的任务 ID 旁，旧插件会输出提示并照常启动。review 命令同样传名称。
 
-可选头部：`EFFORT`（`medium` / `high` / `xhigh` / `max`；不写时，新任务用你 Codex 配置里的 `model_reasoning_effort`，`continue` 和 `fork` 沿用该线程上次的级别）、`MODEL`（缺省用你 Codex 配置里的模型）、`BASE`（review 类的基准分支）、`THREAD`（`continue` 要续接的线程，或 `fork` 要分叉的源线程）、`SIBLINGS`（一行写明其他正在跑的 Codex 任务，会给 Codex 看）、`CWD`（在哪个仓库里跑；`continue` 和 `fork` 必须填原线程的 `cwd`）、`WORKSPACE_ROOTS`（跨仓库 Codex task 模式的额外工作区根目录 JSON 数组，按重复的 `--workspace-root` 透传）。
+可选头部：`EFFORT`（`medium` / `high` / `xhigh` / `max` / `ultra`；不写时，新任务用你 Codex 配置里的 `model_reasoning_effort`，`continue` 和 `fork` 沿用该线程上次的级别）、`MODEL`（缺省用你 Codex 配置里的模型）、`BASE`（review 类的基准分支）、`THREAD`（`continue` 要续接的线程，或 `fork` 要分叉的源线程）、`SIBLINGS`（一行写明其他正在跑的 Codex 任务，会给 Codex 看）、`CWD`（在哪个仓库里跑；`continue` 和 `fork` 必须填原线程的 `cwd`）、`WORKSPACE_ROOTS`（跨仓库 Codex task 模式的额外工作区根目录 JSON 数组，按重复的 `--workspace-root` 透传）。
 
 ### 线程连续性
 

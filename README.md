@@ -199,7 +199,7 @@ Read-only is brief intent under default full access; ACP permissions follow the 
 
 Required header: `NAME` is a few words describing the task, truncated to 80 characters. It appears after `JOB:` in dispatch/collect output and, with a plugin supporting `task --label`, beside the job ID in status and events; older plugins print a note and launch without the label. Review commands carry the label as well.
 
-Optional headers: `EFFORT` (`medium` / `high` / `xhigh` / `max`; left out, a new task runs at `model_reasoning_effort` from your Codex config and `continue` or `fork` keeps its thread's last level), `MODEL` (defaults to the model in your Codex config), `BASE` (base ref for review modes), `THREAD` (the thread `continue` resumes or `fork` branches from), `SIBLINGS` (one line naming other running Codex tasks, shown to Codex), `CWD` (repository to run in; must match the thread's `cwd` on `continue` and `fork`), `WORKSPACE_ROOTS` (JSON array of extra workspace root paths for cross-repo Codex task modes, forwarded as repeatable `--workspace-root`).
+Optional headers: `EFFORT` (`medium` / `high` / `xhigh` / `max` / `ultra`; left out, a new task runs at `model_reasoning_effort` from your Codex config and `continue` or `fork` keeps its thread's last level), `MODEL` (defaults to the model in your Codex config), `BASE` (base ref for review modes), `THREAD` (the thread `continue` resumes or `fork` branches from), `SIBLINGS` (one line naming other running Codex tasks, shown to Codex), `CWD` (repository to run in; must match the thread's `cwd` on `continue` and `fork`), `WORKSPACE_ROOTS` (JSON array of extra workspace root paths for cross-repo Codex task modes, forwarded as repeatable `--workspace-root`).
 
 ### Thread continuity
 
